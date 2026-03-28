@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>ClubLifter Login</title>
@@ -31,7 +31,7 @@
             box-shadow: 0 0 40px rgba(168, 85, 247, 0.3);
         }
 
-        /* LADO DA IMAGEM */
+        /* IMAGE SIDE */
         .left {
             width: 50%;
             background: url('/static/img/foto.jpeg') center/cover no-repeat;
@@ -45,11 +45,10 @@
             background: rgba(0,0,0,0.4);
         }
 
-        /* LADO DO LOGIN */
+        /* LOGIN SIDE */
         .right {
             width: 50%;
-            background: rgba(252, 252, 252, 0.9);
-            backdrop-filter: blur(20px);
+            background: #161b22; /* Updated to match the dark theme */
             padding: 40px;
             display: flex;
             flex-direction: column;
@@ -59,6 +58,7 @@
         h2 {
             color: #fff;
             margin-bottom: 10px;
+            font-weight: bold;
         }
 
         p {
@@ -67,14 +67,14 @@
         }
 
         .form-control {
-            background: transparent;
+            background: #0d1117;
             border: 1px solid #30363d;
             color: white;
             margin-bottom: 15px;
         }
 
         .form-control:focus {
-            background: transparent;
+            background: #0d1117;
             color: white;
             border-color: #a855f7;
             box-shadow: 0 0 10px rgba(168,85,247,0.5);
@@ -83,6 +83,7 @@
         .btn-login {
             background: linear-gradient(45deg, #a855f7, #6d28d9);
             border: none;
+            color: white;
             font-weight: bold;
             transition: 0.3s;
         }
@@ -90,19 +91,15 @@
         .btn-login:hover {
             transform: scale(1.05);
             box-shadow: 0 0 15px rgba(168,85,247,0.7);
-        }
-
-        .logo-mini {
-            width: 120px;
-            margin-bottom: 20px;
-            border-radius: 10px;
+            color: white;
         }
 
         .error {
-            margin-top: 10px;
+            margin-top: 15px;
+            font-size: 0.9rem;
         }
 
-        /* RESPONSIVO */
+        /* RESPONSIVE */
         @media(max-width: 768px){
             .login-container {
                 flex-direction: column;
@@ -117,6 +114,7 @@
 
             .right {
                 width: 100%;
+                padding: 30px;
             }
         }
     </style>
@@ -126,26 +124,26 @@
 
 <div class="login-container">
 
-    <!-- IMAGEM -->
     <div class="left"></div>
 
-    <!-- FORM -->
     <div class="right">
         
-       
-
-        <h2>Bem-vindo</h2>
-        <p>Entre na plataforma ClubLifter</p>
+        <h2>Welcome</h2>
+        <p>Sign in to the ClubLifter platform</p>
 
         <form method="POST">
-            <input type="text" name="username" class="form-control" placeholder="Usuário" required>
-            <input type="password" name="password" class="form-control" placeholder="Senha" required>
+            <div class="mb-3">
+                <input type="text" name="username" class="form-control" placeholder="Username" required>
+            </div>
+            <div class="mb-3">
+                <input type="password" name="password" class="form-control" placeholder="Password" required>
+            </div>
 
-            <button class="btn btn-login w-100 mt-3">Entrar</button>
+            <button type="submit" class="btn btn-login w-100 mt-2 py-2">Login</button>
         </form>
 
         {% if error %}
-            <div class="alert alert-danger error">{{ error }}</div>
+            <div class="alert alert-danger error py-2 text-center">{{ error }}</div>
         {% endif %}
 
     </div>
