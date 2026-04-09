@@ -12,8 +12,9 @@
         body { background: #0d1117; color: white; font-family: 'Segoe UI', sans-serif; overflow-x: hidden; }
         #map { height: 620px; width: 100%; border-radius: 15px; border: 2px solid #30363d; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         .card { background: #161b22; border: 1px solid #30363d; color: white; border-radius: 15px; }
-        .form-control { background: #0d1117; border: 1px solid #30363d; color: white; }
-        .form-control:focus { background: #0d1117; color: white; border-color: #a855f7; box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); }
+        .form-control, .form-select { background: #0d1117; border: 1px solid #30363d; color: white; }
+        .form-control:focus, .form-select:focus { background: #0d1117; color: white; border-color: #a855f7; box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); }
+        .form-select option { background: #161b22; color: white; }
         .btn-primary { background: linear-gradient(45deg, #a855f7, #6d28d9); border: none; font-weight: bold; transition: 0.3s; }
         .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(168, 85, 247, 0.4); }
         
@@ -21,7 +22,6 @@
         .sidebar-scroll { max-height: 380px; overflow-y: auto; scrollbar-width: thin; }
         .text-primary { color: #a855f7 !important; }
         
-        /* Scrollbar styling */
         .sidebar-scroll::-webkit-scrollbar { width: 6px; }
         .sidebar-scroll::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
     </style>
@@ -42,9 +42,23 @@
                         <label class="small text-secondary">Postal Code or ZIP Code</label>
                         <input type="text" name="cep" class="form-control" placeholder="24020350 or 10036" required>
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-2">
                         <label class="small text-secondary">Street Number</label>
                         <input type="text" name="numero" class="form-control" placeholder="123">
+                    </div>
+                    <div class="mb-2">
+                        <label class="small text-secondary">Party Package</label>
+                        <select name="package" class="form-control form-select" required>
+                            <option value="" disabled selected>Select a package</option>
+                            <option value="Bronze">Bronze</option>
+                            <option value="Silver">Silver</option>
+                            <option value="Gold">Gold</option>
+                            <option value="VIP">VIP</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="small text-secondary">Number of Guests</label>
+                        <input type="number" name="guests" class="form-control" placeholder="e.g., 10" min="1" required>
                     </div>
                     <button type="submit" class="btn btn-primary w-100 py-2">GENERATE NAVIGATION ROUTE</button>
                 </form>
@@ -55,10 +69,15 @@
                 <h6 class="text-secondary border-bottom border-secondary pb-2 mb-2">Delivery History</h6>
                 <div class="sidebar-scroll">
                     <table class="table table-dark table-sm small" id="tabelaDados">
-                        <thead><tr><th>Customer</th><th class="text-end">Distance</th></tr></thead>
+                        <thead><tr><th>Customer</th><th>Package</th><th>Guests</th><th class="text-end">Distance</th></tr></thead>
                         <tbody>
                             {% for c in clientes %}
-                            <tr><td>{{ c.nome }}</td><td class="text-end text-primary">{{ c.distancia }} km</td></tr>
+                            <tr>
+                                <td>{{ c.nome }}</td>
+                                <td>{{ c.package }}</td>
+                                <td>{{ c.guests }}</td>
+                                <td class="text-end text-primary">{{ c.distancia }} km</td>
+                            </tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -76,10 +95,8 @@
 <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
 
 <script>
-    // Initialize map focused on Niterói (Base)
     var map = L.map('map').setView([-22.8833, -43.1033], 13);
     
-    // Dark Mode Tile Layer
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '© ClubLifter Logistics'
     }).addTo(map);
@@ -100,14 +117,12 @@
             const data = await res.json();
 
             if (data.success) {
-                // Clear previous layers
                 if (rotaAtual) map.removeControl(rotaAtual);
                 camadaLinha.clearLayers();
 
                 const p_mot = L.latLng(data.motorista_coords.lat, data.motorista_coords.lng);
                 const p_cli = L.latLng(data.cliente_coords.lat, data.cliente_coords.lng);
 
-                // Route Configuration
                 rotaAtual = L.Routing.control({
                     waypoints: [p_mot, p_cli],
                     router: L.Routing.osrmv1({
@@ -116,7 +131,7 @@
                     }),
                     lineOptions: {
                         styles: [
-                            { color: '#a855f7', opacity: 0.8, weight: 6 } // Neon Purple
+                            { color: '#a855f7', opacity: 0.8, weight: 6 }
                         ]
                     },
                     show: false,
@@ -128,7 +143,6 @@
                     }
                 }).addTo(map);
 
-                // Event: Road route not found (International/Overseas)
                 rotaAtual.on('routingerror', function() {
                     status.innerHTML = "<span class='text-warning'>✈️ International Route (Air Connection)</span>";
                     L.polyline([p_mot, p_cli], {
@@ -139,16 +153,18 @@
                     }).addTo(camadaLinha);
                 });
 
-                // Event: Road route success
                 rotaAtual.on('routesfound', function(e) {
                     status.innerHTML = "<span class='text-success'>✅ Ground route optimized!</span>";
                 });
 
-                // Smooth zoom adjustment
                 map.flyToBounds([p_mot, p_cli], { padding: [100, 100], duration: 1.5 });
 
-                // Update History Table
-                const novaLinha = `<tr><td>${data.nome || formData.get('nome')}</td><td class="text-end text-primary">${data.distancia} km</td></tr>`;
+                const novaLinha = `<tr>
+                    <td>${data.nome || formData.get('nome')}</td>
+                    <td>${formData.get('package')}</td>
+                    <td>${formData.get('guests')}</td>
+                    <td class="text-end text-primary">${data.distancia} km</td>
+                </tr>`;
                 document.querySelector("#tabelaDados tbody").insertAdjacentHTML('afterbegin', novaLinha);
                 
                 e.target.reset();

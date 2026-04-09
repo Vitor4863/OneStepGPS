@@ -5,16 +5,16 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 app = Flask(__name__)
 app.secret_key = "devverse_secret"
 
-# Configurações OneStepGPS
+# OneStepGPS Settings
 API_KEY = "cWpVu8yTfVRytZRt95Tnkv_VmBfUywfg_oT-GkqGzlI"
 URL_API = "https://track.onestepgps.com/v3/api/public/marker"
 
 USER = {"username": "admin", "password": "1234"}
 
-# Funções Utilitárias
+# Utility Functions
 def calcular_distancia(lat1, lon1, lat2, lon2):
     try:
-        R = 6371 # Raio da Terra em km
+        R = 6371
         phi1, phi2 = math.radians(float(lat1)), math.radians(float(lat2))
         dlat = math.radians(float(lat2)-float(lat1))
         dlon = math.radians(float(lon2)-float(lon1))
@@ -52,18 +52,19 @@ def limpar():
 
 @app.route('/cadastrar_cep', methods=['POST'])
 def cadastrar_cep():
-    if not session.get("logged"): return jsonify({"success": False, "error": "Não autorizado"})
+    if not session.get("logged"): return jsonify({"success": False, "error": "Unauthorized"})
 
     nome = request.form.get('nome')
     cep_input = request.form.get('cep', '').strip().replace("-", "")
     numero = request.form.get('numero', '').strip()
+    package = request.form.get('package', '').strip()
+    guests = request.form.get('guests', '0').strip()
 
     try:
         full_address = ""
         
-        # 1. LÓGICA HÍBRIDA: BRASIL (CEP) OU EUA (ZIP CODE)
+        # 1. HYBRID LOGIC: BRAZIL (CEP) OR USA (ZIP CODE)
         if len(cep_input) == 8 and cep_input.isdigit():
-            # Tenta ViaCEP para endereços brasileiros
             viacep_res = requests.get(f"https://viacep.com.br/ws/{cep_input}/json/").json()
             if "erro" not in viacep_res:
                 rua = viacep_res.get('logradouro', '')
@@ -73,28 +74,26 @@ def cadastrar_cep():
             else:
                 full_address = f"{cep_input}, {numero}, Brazil"
         else:
-            # Caso contrário, assume ZIP Code (EUA) ou padrão internacional
-            # Nos EUA, o número costuma vir antes do código postal na busca
             full_address = f"{numero} {cep_input}, USA"
 
-        # 2. GEOCODIFICAÇÃO (NOMINATIM) - Obtém as coordenadas reais para a API
+        # 2. GEOCODING (NOMINATIM)
         geo_res = requests.get(
             f"https://nominatim.openstreetmap.org/search?q={full_address}&format=json&limit=1", 
             headers={'User-Agent': 'DevVerse_Logistics_App'}
         ).json()
         
         if not geo_res: 
-            return jsonify({"success": False, "error": "Endereço não localizado no mapa global."})
+            return jsonify({"success": False, "error": "Address not found on global map."})
         
         lat_cli = float(geo_res[0]['lat'])
         lng_cli = float(geo_res[0]['lon'])
         display_address = geo_res[0]['display_name']
 
-        # 3. BUSCA MOTORISTA MAIS PRÓXIMO (OneStepGPS)
+        # 3. FIND NEAREST DRIVER (OneStepGPS)
         headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
         res_v = requests.get("https://track.onestepgps.com/v3/api/public/device-info?lat_lng=1", headers=headers).json()
         
-        melhor_v, menor_d, motorista_coords = "Indisponível", float('inf'), None
+        melhor_v, menor_d, motorista_coords = "Unavailable", float('inf'), None
         lista = res_v if isinstance(res_v, list) else [res_v]
         
         for v in lista:
@@ -103,10 +102,10 @@ def cadastrar_cep():
             if v_lat and v_lng:
                 d = calcular_distancia(lat_cli, lng_cli, v_lat, v_lng)
                 if d < menor_d:
-                    menor_d, melhor_v = d, v.get('display_name', 'Rastreador')
+                    menor_d, melhor_v = d, v.get('display_name', 'Tracker')
                     motorista_coords = {"lat": float(v_lat), "lng": float(v_lng)}
 
-        # 4. CADASTRO NA API ONESTEPGPS (Mantendo o seu payload original)
+        # 4. REGISTER ON ONESTEPGPS API
         payload = {
             "display_name": nome, 
             "active": True, 
@@ -119,14 +118,16 @@ def cadastrar_cep():
         }
         requests.post(URL_API, json=payload, headers=headers)
 
-        # 5. ATUALIZAR SESSÃO
+        # 5. UPDATE SESSION
         distancia_arredondada = round(menor_d, 2) if menor_d != float('inf') else 0
         temp_list = list(session.get('clientes', []))
         temp_list.append({
             "nome": nome, 
             "endereco": display_address, 
             "motorista": melhor_v, 
-            "distancia": distancia_arredondada
+            "distancia": distancia_arredondada,
+            "package": package,
+            "guests": guests
         })
         session['clientes'] = temp_list
         session.modified = True
@@ -136,7 +137,9 @@ def cadastrar_cep():
             "motorista": melhor_v,
             "distancia": distancia_arredondada,
             "cliente_coords": {"lat": lat_cli, "lng": lng_cli},
-            "motorista_coords": motorista_coords
+            "motorista_coords": motorista_coords,
+            "package": package,
+            "guests": guests
         })
 
     except Exception as e:
