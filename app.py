@@ -18,9 +18,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# ─── ONESTEPGPS SETTINGS ──────────────────────────────────────────────────────
-API_KEY = "cWpVu8yTfVRytZRt95Tnkv_VmBfUywfg_oT-GkqGzlI"
-URL_API = "https://track.onestepgps.com/v3/api/public/marker"
+# ─── SETTINGS ─────────────────────────────────────────────────────────────────
+API_KEY      = "cWpVu8yTfVRytZRt95Tnkv_VmBfUywfg_oT-GkqGzlI"
+URL_API      = "https://track.onestepgps.com/v3/api/public/marker"
+MAKE_WEBHOOK = "https://hook.us1.make.com/1j3rppk5wufvglcbe23kto5c63uvdt32"
 
 # ─── USERS ────────────────────────────────────────────────────────────────────
 USERS = {
@@ -39,46 +40,35 @@ class Package(db.Model):
 
     def to_dict(self):
         return {
-            "id":          self.id,
-            "name":        self.name,
-            "description": self.description,
-            "price":       self.price,
-            "max_guests":  self.max_guests,
-            "active":      self.active
+            "id": self.id, "name": self.name, "description": self.description,
+            "price": self.price, "max_guests": self.max_guests, "active": self.active
         }
 
 class Driver(db.Model):
     id    = db.Column(db.Integer, primary_key=True)
-    name  = db.Column(db.String(100), nullable=False, unique=True)  # must match OneStepGPS display_name
-    phone = db.Column(db.String(20), default="")  # E.164 format e.g. +17025551234
+    name  = db.Column(db.String(100), nullable=False, unique=True)
+    phone = db.Column(db.String(20), default="")
 
     def to_dict(self):
-        return {
-            "id":    self.id,
-            "name":  self.name,
-            "phone": self.phone
-        }
+        return {"id": self.id, "name": self.name, "phone": self.phone}
 
 class Customer(db.Model):
-    id              = db.Column(db.Integer, primary_key=True)
-    nome            = db.Column(db.String(100))
-    endereco        = db.Column(db.String(500))
-    motorista       = db.Column(db.String(100))
-    motorista_phone = db.Column(db.String(20), default="")
-    distancia       = db.Column(db.Float)
-    package         = db.Column(db.String(100))
-    guests          = db.Column(db.Integer)
+    id               = db.Column(db.Integer, primary_key=True)
+    nome             = db.Column(db.String(100))
+    endereco         = db.Column(db.String(500))
+    motorista        = db.Column(db.String(100))
+    motorista_phone  = db.Column(db.String(20), default="")
+    distancia        = db.Column(db.Float)
+    package          = db.Column(db.String(100))
+    guests           = db.Column(db.Integer)
+    pickup_datetime  = db.Column(db.String(50), default="")
 
     def to_dict(self):
         return {
-            "id":              self.id,
-            "nome":            self.nome,
-            "endereco":        self.endereco,
-            "motorista":       self.motorista,
-            "motorista_phone": self.motorista_phone,
-            "distancia":       self.distancia,
-            "package":         self.package,
-            "guests":          self.guests
+            "id": self.id, "nome": self.nome, "endereco": self.endereco,
+            "motorista": self.motorista, "motorista_phone": self.motorista_phone,
+            "distancia": self.distancia, "package": self.package,
+            "guests": self.guests, "pickup_datetime": self.pickup_datetime
         }
 
 # ─── UTILITY ──────────────────────────────────────────────────────────────────
@@ -96,7 +86,14 @@ def calcular_distancia(lat1, lon1, lat2, lon2):
 def is_master():
     return session.get("role") == "master"
 
-# ─── AUTH ROUTES ──────────────────────────────────────────────────────────────
+def fire_webhook(payload: dict):
+    """POST data to Make.com webhook — fire and forget, never crash the main flow."""
+    try:
+        requests.post(MAKE_WEBHOOK, json=payload, timeout=5)
+    except Exception:
+        pass
+
+# ─── AUTH ─────────────────────────────────────────────────────────────────────
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -116,7 +113,7 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# ─── MAIN ROUTE ───────────────────────────────────────────────────────────────
+# ─── MAIN ─────────────────────────────────────────────────────────────────────
 @app.route('/')
 def index():
     if not session.get("logged"):
@@ -139,11 +136,12 @@ def cadastrar_cep():
     if not session.get("logged"):
         return jsonify({"success": False, "error": "Unauthorized"})
 
-    nome      = request.form.get('nome')
-    cep_input = request.form.get('cep', '').strip().replace("-", "")
-    numero    = request.form.get('numero', '').strip()
-    package   = request.form.get('package', '').strip()
-    guests    = int(request.form.get('guests', 0))
+    nome             = request.form.get('nome')
+    cep_input        = request.form.get('cep', '').strip().replace("-", "")
+    numero           = request.form.get('numero', '').strip()
+    package          = request.form.get('package', '').strip()
+    guests           = int(request.form.get('guests', 0))
+    pickup_datetime  = request.form.get('pickup_datetime', '').strip()
 
     try:
         # 1. HYBRID LOGIC: BRAZIL (CEP) OR USA (ZIP CODE)
@@ -159,7 +157,7 @@ def cadastrar_cep():
         else:
             full_address = f"{numero} {cep_input}, USA"
 
-        # 2. GEOCODING (NOMINATIM)
+        # 2. GEOCODING
         geo_res = requests.get(
             f"https://nominatim.openstreetmap.org/search?q={full_address}&format=json&limit=1",
             headers={'User-Agent': 'DevVerse_Logistics_App'}
@@ -192,36 +190,39 @@ def cadastrar_cep():
                     melhor_v = v.get('display_name', 'Tracker')
                     motorista_coords = {"lat": float(v_lat), "lng": float(v_lng)}
 
-        # 4. LOOK UP DRIVER PHONE IN LOCAL DB (match by name)
+        # 4. LOOK UP DRIVER PHONE
         driver_profile  = Driver.query.filter_by(name=melhor_v).first()
         motorista_phone = driver_profile.phone if driver_profile else ""
 
-        # 5. REGISTER ON ONESTEPGPS API
-        payload = {
-            "display_name": nome,
-            "active":       True,
-            "status":       "active",
-            "marker_type":  "point",
-            "detail": {
-                "description": display_address,
-                "lat_lng":     {"lat": lat_cli, "lng": lng_cli}
-            }
+        # 5. REGISTER ON ONESTEPGPS
+        payload_gps = {
+            "display_name": nome, "active": True, "status": "active", "marker_type": "point",
+            "detail": {"description": display_address, "lat_lng": {"lat": lat_cli, "lng": lng_cli}}
         }
-        requests.post(URL_API, json=payload, headers=headers_api)
+        requests.post(URL_API, json=payload_gps, headers=headers_api)
 
         # 6. SAVE TO DATABASE
         distancia_arredondada = round(menor_d, 2) if menor_d != float('inf') else 0
         customer = Customer(
-            nome=nome,
-            endereco=display_address,
-            motorista=melhor_v,
-            motorista_phone=motorista_phone,
-            distancia=distancia_arredondada,
-            package=package,
-            guests=guests
+            nome=nome, endereco=display_address,
+            motorista=melhor_v, motorista_phone=motorista_phone,
+            distancia=distancia_arredondada, package=package,
+            guests=guests, pickup_datetime=pickup_datetime
         )
         db.session.add(customer)
         db.session.commit()
+
+        # 7. FIRE MAKE.COM WEBHOOK
+        fire_webhook({
+            "driver_name":      melhor_v,
+            "driver_phone":     motorista_phone,
+            "customer_name":    nome,
+            "pickup_address":   display_address,
+            "pickup_datetime":  pickup_datetime,
+            "package":          package,
+            "guests":           guests,
+            "distance_km":      distancia_arredondada
+        })
 
         return jsonify({
             "success":          True,
@@ -231,39 +232,37 @@ def cadastrar_cep():
             "cliente_coords":   {"lat": lat_cli, "lng": lng_cli},
             "motorista_coords": motorista_coords,
             "package":          package,
-            "guests":           guests
+            "guests":           guests,
+            "pickup_datetime":  pickup_datetime
         })
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
-# ─── ADMIN: PACKAGE MANAGEMENT ────────────────────────────────────────────────
+# ─── ADMIN: PACKAGES ──────────────────────────────────────────────────────────
 @app.route('/admin/packages')
 def admin_packages():
     if not session.get("logged") or not is_master():
         return redirect(url_for("login"))
-    packages = Package.query.all()
-    return render_template('admin_packages.html', packages=packages)
+    return render_template('admin_packages.html', packages=Package.query.all())
 
 @app.route('/admin/packages/new', methods=['POST'])
 def new_package():
-    if not is_master():
-        return jsonify({"success": False, "error": "Unauthorized"})
-    name        = request.form.get('name', '').strip()
-    description = request.form.get('description', '').strip()
-    price       = float(request.form.get('price', 0))
-    max_guests  = int(request.form.get('max_guests', 0))
-    if not name:
-        return jsonify({"success": False, "error": "Name is required"})
-    pkg = Package(name=name, description=description, price=price, max_guests=max_guests)
-    db.session.add(pkg)
-    db.session.commit()
+    if not is_master(): return jsonify({"success": False, "error": "Unauthorized"})
+    name = request.form.get('name', '').strip()
+    if not name: return jsonify({"success": False, "error": "Name is required"})
+    pkg = Package(
+        name=name,
+        description=request.form.get('description', '').strip(),
+        price=float(request.form.get('price', 0)),
+        max_guests=int(request.form.get('max_guests', 0))
+    )
+    db.session.add(pkg); db.session.commit()
     return jsonify({"success": True, "package": pkg.to_dict()})
 
 @app.route('/admin/packages/edit/<int:pkg_id>', methods=['POST'])
 def edit_package(pkg_id):
-    if not is_master():
-        return jsonify({"success": False, "error": "Unauthorized"})
+    if not is_master(): return jsonify({"success": False, "error": "Unauthorized"})
     pkg             = Package.query.get_or_404(pkg_id)
     pkg.name        = request.form.get('name', pkg.name).strip()
     pkg.description = request.form.get('description', pkg.description).strip()
@@ -275,40 +274,32 @@ def edit_package(pkg_id):
 
 @app.route('/admin/packages/delete/<int:pkg_id>', methods=['POST'])
 def delete_package(pkg_id):
-    if not is_master():
-        return jsonify({"success": False, "error": "Unauthorized"})
+    if not is_master(): return jsonify({"success": False, "error": "Unauthorized"})
     pkg = Package.query.get_or_404(pkg_id)
-    db.session.delete(pkg)
-    db.session.commit()
+    db.session.delete(pkg); db.session.commit()
     return jsonify({"success": True})
 
-# ─── ADMIN: DRIVER MANAGEMENT ─────────────────────────────────────────────────
+# ─── ADMIN: DRIVERS ───────────────────────────────────────────────────────────
 @app.route('/admin/drivers')
 def admin_drivers():
     if not session.get("logged") or not is_master():
         return redirect(url_for("login"))
-    drivers = Driver.query.all()
-    return render_template('admin_drivers.html', drivers=drivers)
+    return render_template('admin_drivers.html', drivers=Driver.query.all())
 
 @app.route('/admin/drivers/new', methods=['POST'])
 def new_driver():
-    if not is_master():
-        return jsonify({"success": False, "error": "Unauthorized"})
-    name  = request.form.get('name', '').strip()
-    phone = request.form.get('phone', '').strip()
-    if not name:
-        return jsonify({"success": False, "error": "Name is required"})
+    if not is_master(): return jsonify({"success": False, "error": "Unauthorized"})
+    name = request.form.get('name', '').strip()
+    if not name: return jsonify({"success": False, "error": "Name is required"})
     if Driver.query.filter_by(name=name).first():
         return jsonify({"success": False, "error": "A driver with this name already exists"})
-    driver = Driver(name=name, phone=phone)
-    db.session.add(driver)
-    db.session.commit()
+    driver = Driver(name=name, phone=request.form.get('phone', '').strip())
+    db.session.add(driver); db.session.commit()
     return jsonify({"success": True, "driver": driver.to_dict()})
 
 @app.route('/admin/drivers/edit/<int:driver_id>', methods=['POST'])
 def edit_driver(driver_id):
-    if not is_master():
-        return jsonify({"success": False, "error": "Unauthorized"})
+    if not is_master(): return jsonify({"success": False, "error": "Unauthorized"})
     driver       = Driver.query.get_or_404(driver_id)
     driver.name  = request.form.get('name', driver.name).strip()
     driver.phone = request.form.get('phone', driver.phone).strip()
@@ -317,39 +308,33 @@ def edit_driver(driver_id):
 
 @app.route('/admin/drivers/delete/<int:driver_id>', methods=['POST'])
 def delete_driver(driver_id):
-    if not is_master():
-        return jsonify({"success": False, "error": "Unauthorized"})
+    if not is_master(): return jsonify({"success": False, "error": "Unauthorized"})
     driver = Driver.query.get_or_404(driver_id)
-    db.session.delete(driver)
-    db.session.commit()
+    db.session.delete(driver); db.session.commit()
     return jsonify({"success": True})
 
-# ─── PUBLIC API ENDPOINTS ─────────────────────────────────────────────────────
+# ─── PUBLIC API ───────────────────────────────────────────────────────────────
 @app.route('/api/customers', methods=['GET'])
 def api_customers():
-    customers = Customer.query.order_by(Customer.id.desc()).all()
-    return jsonify([c.to_dict() for c in customers])
+    return jsonify([c.to_dict() for c in Customer.query.order_by(Customer.id.desc()).all()])
 
 @app.route('/api/packages', methods=['GET'])
 def api_packages():
-    packages = Package.query.filter_by(active=True).all()
-    return jsonify([p.to_dict() for p in packages])
+    return jsonify([p.to_dict() for p in Package.query.filter_by(active=True).all()])
 
 @app.route('/api/drivers', methods=['GET'])
 def api_drivers():
-    drivers = Driver.query.all()
-    return jsonify([d.to_dict() for d in drivers])
+    return jsonify([d.to_dict() for d in Driver.query.all()])
 
 # ─── INIT ─────────────────────────────────────────────────────────────────────
 def seed_packages():
     if Package.query.count() == 0:
-        defaults = [
-            Package(name="Bronze", description="Basic package",               price=99.0,  max_guests=5),
-            Package(name="Silver", description="Mid-tier package",            price=199.0, max_guests=10),
-            Package(name="Gold",   description="Premium package",             price=349.0, max_guests=20),
+        db.session.add_all([
+            Package(name="Bronze", description="Basic package",                price=99.0,  max_guests=5),
+            Package(name="Silver", description="Mid-tier package",             price=199.0, max_guests=10),
+            Package(name="Gold",   description="Premium package",              price=349.0, max_guests=20),
             Package(name="VIP",    description="All-inclusive VIP experience", price=599.0, max_guests=50),
-        ]
-        db.session.add_all(defaults)
+        ])
         db.session.commit()
 
 with app.app_context():
