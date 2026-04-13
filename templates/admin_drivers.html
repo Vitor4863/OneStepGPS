@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ClubLifter - Driver Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #0d1117; color: white; font-family: 'Segoe UI', sans-serif; }
+        .card { background: #161b22; border: 1px solid #30363d; color: white; border-radius: 15px; }
+        .form-control { background: #0d1117; border: 1px solid #30363d; color: white; }
+        .form-control:focus { background: #0d1117; color: white; border-color: #a855f7; box-shadow: 0 0 10px rgba(168,85,247,0.4); }
+        .form-control::placeholder { color: #555; }
+        .btn-primary { background: linear-gradient(45deg, #a855f7, #6d28d9); border: none; font-weight: bold; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(168,85,247,0.4); }
+        .btn-outline-danger  { border-color: #dc3545; color: #dc3545; }
+        .btn-outline-danger:hover  { background: #dc3545; color: white; }
+        .btn-outline-warning { border-color: #ffc107; color: #ffc107; }
+        .btn-outline-warning:hover { background: #ffc107; color: #000; }
+        .text-primary { color: #a855f7 !important; }
+        .table { color: white; }
+        .table thead th { color: #8b949e; font-weight: 500; border-color: #30363d; }
+        .table td { border-color: #21262d; vertical-align: middle; }
+        .modal-content { background: #161b22; border: 1px solid #30363d; color: white; }
+        .modal-header, .modal-footer { border-color: #30363d; }
+        .hint { font-size: 0.75rem; color: #6b7280; margin-top: 4px; }
+        .nav-link { color: #8b949e; }
+        .nav-link:hover { color: #a855f7; }
+        .nav-link.active-page { color: #a855f7; font-weight: bold; }
+        #toast { position: fixed; bottom: 30px; right: 30px; z-index: 9999; min-width: 250px; display: none; }
+    </style>
+</head>
+<body class="py-5">
+<div class="container" style="max-width: 860px;">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="text-primary fw-bold mb-0">ClubLifter</h4>
+            <small class="text-secondary">Admin Panel</small>
+        </div>
+        <div class="d-flex gap-3 align-items-center">
+            <a href="/admin/packages" class="nav-link">Packages</a>
+            <a href="/admin/drivers"  class="nav-link active-page">Drivers</a>
+            <a href="/" class="btn btn-sm btn-outline-secondary">← Dashboard</a>
+        </div>
+    </div>
+
+    <!-- Add New Driver -->
+    <div class="card p-4 mb-4">
+        <h6 class="text-secondary mb-3">Add New Driver</h6>
+        <div class="row g-2 align-items-start">
+            <div class="col-md-5">
+                <input type="text" id="newName" class="form-control" placeholder="Driver name (must match OneStepGPS)">
+                <p class="hint">⚠️ Must match exactly the display name in OneStepGPS</p>
+            </div>
+            <div class="col-md-5">
+                <input type="text" id="newPhone" class="form-control" placeholder="Phone in E.164 (e.g. +17025551234)">
+                <p class="hint">Format: +[country code][number]</p>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" onclick="addDriver()">+ Add</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Drivers Table -->
+    <div class="card p-4">
+        <h6 class="text-secondary mb-3">Registered Drivers</h6>
+        <table class="table table-dark table-sm">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Phone (E.164)</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="driversTable">
+                {% for d in drivers %}
+                <tr id="row-{{ d.id }}">
+                    <td class="fw-bold">{{ d.name }}</td>
+                    <td class="text-primary">{{ d.phone if d.phone else '—' }}</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-warning me-1"
+                            onclick="openEdit({{ d.id }}, '{{ d.name }}', '{{ d.phone }}')">Edit</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteDriver({{ d.id }})">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if not drivers %}
+        <p class="text-secondary text-center small mt-2">No drivers registered yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-primary">Edit Driver</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                <div class="mb-3">
+                    <label class="small text-secondary">Name <span class="text-danger">(must match OneStepGPS)</span></label>
+                    <input type="text" id="editName" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="small text-secondary">Phone (E.164)</label>
+                    <input type="text" id="editPhone" class="form-control" placeholder="+17025551234">
+                    <p class="hint">Format: +[country code][number], e.g. +17025551234</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast align-items-center text-white border-0">
+    <div class="d-flex"><div class="toast-body" id="toastMsg"></div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const editModal = new bootstrap.Modal(document.getElementById('editModal'));
+
+    function showToast(msg, success = true) {
+        const t = document.getElementById('toast');
+        t.style.display = 'block';
+        t.style.background = success ? '#22c55e' : '#ef4444';
+        document.getElementById('toastMsg').innerText = msg;
+        setTimeout(() => t.style.display = 'none', 3000);
+    }
+
+    async function addDriver() {
+        const name  = document.getElementById('newName').value.trim();
+        const phone = document.getElementById('newPhone').value.trim();
+        if (!name) return showToast('Name is required', false);
+        const fd = new FormData();
+        fd.append('name', name);
+        fd.append('phone', phone);
+        const data = await (await fetch('/admin/drivers/new', { method: 'POST', body: fd })).json();
+        if (data.success) { showToast('Driver added!'); location.reload(); }
+        else showToast(data.error, false);
+    }
+
+    function openEdit(id, name, phone) {
+        document.getElementById('editId').value    = id;
+        document.getElementById('editName').value  = name;
+        document.getElementById('editPhone').value = phone;
+        editModal.show();
+    }
+
+    async function saveEdit() {
+        const id = document.getElementById('editId').value;
+        const fd = new FormData();
+        fd.append('name',  document.getElementById('editName').value);
+        fd.append('phone', document.getElementById('editPhone').value);
+        const data = await (await fetch(`/admin/drivers/edit/${id}`, { method: 'POST', body: fd })).json();
+        if (data.success) { showToast('Driver updated!'); editModal.hide(); location.reload(); }
+        else showToast(data.error, false);
+    }
+
+    async function deleteDriver(id) {
+        if (!confirm('Delete this driver?')) return;
+        const data = await (await fetch(`/admin/drivers/delete/${id}`, { method: 'POST' })).json();
+        if (data.success) { showToast('Deleted!'); document.getElementById(`row-${id}`).remove(); }
+        else showToast(data.error, false);
+    }
+</script>
+</body>
+</html>
