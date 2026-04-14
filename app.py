@@ -145,31 +145,19 @@ def cadastrar_cep():
     if not session.get("logged"):
         return jsonify({"success": False, "error": "Unauthorized"})
 
-    nome            = request.form.get('nome')
-    cep_input       = request.form.get('cep', '').strip().replace("-", "")
-    numero          = request.form.get('numero', '').strip()
-    package         = request.form.get('package', '').strip()
-    guests          = int(request.form.get('guests', 0))
-    pickup_datetime = request.form.get('pickup_datetime', '').strip()
+    nome              = request.form.get('nome')
+    endereco_completo = request.form.get('endereco_completo', '').strip()
+    package           = request.form.get('package', '').strip()
+    guests            = int(request.form.get('guests', 0))
+    pickup_datetime   = request.form.get('pickup_datetime', '').strip()
 
     try:
-        # 1. HYBRID LOGIC: BRAZIL (CEP) OR USA (ZIP CODE)
-        if len(cep_input) == 8 and cep_input.isdigit():
-            viacep_res = requests.get(f"https://viacep.com.br/ws/{cep_input}/json/").json()
-            if "erro" not in viacep_res:
-                rua    = viacep_res.get('logradouro', '')
-                bairro = viacep_res.get('bairro', '')
-                cidade = viacep_res.get('localidade', '')
-                full_address = f"{rua}, {numero}, {bairro}, {cidade}, Brazil"
-            else:
-                full_address = f"{cep_input}, {numero}, Brazil"
-        else:
-            full_address = f"{numero} {cep_input}, USA"
-
-        # 2. GEOCODING
+        # 1. GEOCODING - full address for maximum accuracy
+        import urllib.parse
+        encoded = urllib.parse.quote(endereco_completo)
         geo_res = requests.get(
-            f"https://nominatim.openstreetmap.org/search?q={full_address}&format=json&limit=1",
-            headers={'User-Agent': 'DevVerse_Logistics_App'}
+            f"https://nominatim.openstreetmap.org/search?q={encoded}&format=json&limit=1&addressdetails=1",
+            headers={'User-Agent': 'ClubLifter_LasVegas_App'}
         ).json()
 
         if not geo_res:
@@ -213,7 +201,7 @@ def cadastrar_cep():
         # 6. SAVE TO DATABASE
         distancia_arredondada = round(menor_d, 2) if menor_d != float('inf') else 0
         customer = Customer(
-            nome=nome, endereco=display_address,
+            nome=nome, endereco=endereco_completo,
             motorista=melhor_v, motorista_phone=motorista_phone,
             distancia=distancia_arredondada, package=package,
             guests=guests, pickup_datetime=pickup_datetime
@@ -226,7 +214,7 @@ def cadastrar_cep():
             "driver_name":     melhor_v,
             "driver_phone":    motorista_phone,
             "customer_name":   nome,
-            "pickup_address":  display_address,
+            "pickup_address":  endereco_completo,
             "pickup_datetime": pickup_datetime,
             "package":         package,
             "guests":          guests,
