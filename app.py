@@ -4,6 +4,7 @@ import requests
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.secret_key = "devverse_secret"
@@ -23,13 +24,22 @@ API_KEY      = "cWpVu8yTfVRytZRt95Tnkv_VmBfUywfg_oT-GkqGzlI"
 URL_API      = "https://track.onestepgps.com/v3/api/public/marker"
 MAKE_WEBHOOK = "https://hook.us1.make.com/1j3rppk5wufvglcbe23kto5c63uvdt32"
 
-# ─── USERS ────────────────────────────────────────────────────────────────────
-USERS = {
-    "admin":    {"password": "1234",  "role": "master"},
-    "promoter": {"password": "5678",  "role": "promoter"}
-}
-
 # ─── MODELS ───────────────────────────────────────────────────────────────────
+class User(db.Model):
+    id            = db.Column(db.Integer, primary_key=True)
+    username      = db.Column(db.String(80), nullable=False, unique=True)
+    password_hash = db.Column(db.String(200), nullable=False)
+    role          = db.Column(db.String(20), default="promoter")  # 'master' or 'promoter'
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def to_dict(self):
+        return {"id": self.id, "username": self.username, "role": self.role}
+
 class Package(db.Model):
     id          = db.Column(db.Integer, primary_key=True)
     name        = db.Column(db.String(100), nullable=False)
@@ -53,15 +63,15 @@ class Driver(db.Model):
         return {"id": self.id, "name": self.name, "phone": self.phone}
 
 class Customer(db.Model):
-    id               = db.Column(db.Integer, primary_key=True)
-    nome             = db.Column(db.String(100))
-    endereco         = db.Column(db.String(500))
-    motorista        = db.Column(db.String(100))
-    motorista_phone  = db.Column(db.String(20), default="")
-    distancia        = db.Column(db.Float)
-    package          = db.Column(db.String(100))
-    guests           = db.Column(db.Integer)
-    pickup_datetime  = db.Column(db.String(50), default="")
+    id              = db.Column(db.Integer, primary_key=True)
+    nome            = db.Column(db.String(100))
+    endereco        = db.Column(db.String(500))
+    motorista       = db.Column(db.String(100))
+    motorista_phone = db.Column(db.String(20), default="")
+    distancia       = db.Column(db.Float)
+    package         = db.Column(db.String(100))
+    guests          = db.Column(db.Integer)
+    pickup_datetime = db.Column(db.String(50), default="")
 
     def to_dict(self):
         return {
@@ -87,7 +97,6 @@ def is_master():
     return session.get("role") == "master"
 
 def fire_webhook(payload: dict):
-    """POST data to Make.com webhook — fire and forget, never crash the main flow."""
     try:
         requests.post(MAKE_WEBHOOK, json=payload, timeout=5)
     except Exception:
@@ -99,11 +108,11 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        user = USERS.get(username)
-        if user and user['password'] == password:
+        user = User.query.filter_by(username=username).first()
+        if user and user.check_password(password):
             session['logged']   = True
-            session['username'] = username
-            session['role']     = user['role']
+            session['username'] = user.username
+            session['role']     = user.role
             return redirect(url_for('index'))
         return render_template('login.html', error="Invalid credentials")
     return render_template('login.html')
@@ -136,12 +145,12 @@ def cadastrar_cep():
     if not session.get("logged"):
         return jsonify({"success": False, "error": "Unauthorized"})
 
-    nome             = request.form.get('nome')
-    cep_input        = request.form.get('cep', '').strip().replace("-", "")
-    numero           = request.form.get('numero', '').strip()
-    package          = request.form.get('package', '').strip()
-    guests           = int(request.form.get('guests', 0))
-    pickup_datetime  = request.form.get('pickup_datetime', '').strip()
+    nome            = request.form.get('nome')
+    cep_input       = request.form.get('cep', '').strip().replace("-", "")
+    numero          = request.form.get('numero', '').strip()
+    package         = request.form.get('package', '').strip()
+    guests          = int(request.form.get('guests', 0))
+    pickup_datetime = request.form.get('pickup_datetime', '').strip()
 
     try:
         # 1. HYBRID LOGIC: BRAZIL (CEP) OR USA (ZIP CODE)
@@ -214,14 +223,14 @@ def cadastrar_cep():
 
         # 7. FIRE MAKE.COM WEBHOOK
         fire_webhook({
-            "driver_name":      melhor_v,
-            "driver_phone":     motorista_phone,
-            "customer_name":    nome,
-            "pickup_address":   display_address,
-            "pickup_datetime":  pickup_datetime,
-            "package":          package,
-            "guests":           guests,
-            "distance_km":      distancia_arredondada
+            "driver_name":     melhor_v,
+            "driver_phone":    motorista_phone,
+            "customer_name":   nome,
+            "pickup_address":  display_address,
+            "pickup_datetime": pickup_datetime,
+            "package":         package,
+            "guests":          guests,
+            "distance_km":     distancia_arredondada
         })
 
         return jsonify({
@@ -238,6 +247,53 @@ def cadastrar_cep():
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+
+# ─── ADMIN: USER MANAGEMENT ───────────────────────────────────────────────────
+@app.route('/admin/users')
+def admin_users():
+    if not session.get("logged") or not is_master():
+        return redirect(url_for("login"))
+    users = User.query.filter_by(role='promoter').all()
+    return render_template('admin_users.html', users=users)
+
+@app.route('/admin/users/new', methods=['POST'])
+def new_user():
+    if not is_master():
+        return jsonify({"success": False, "error": "Unauthorized"})
+    username = request.form.get('username', '').strip()
+    password = request.form.get('password', '').strip()
+    if not username or not password:
+        return jsonify({"success": False, "error": "Username and password are required"})
+    if User.query.filter_by(username=username).first():
+        return jsonify({"success": False, "error": "Username already exists"})
+    user = User(username=username, role='promoter')
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    return jsonify({"success": True, "user": user.to_dict()})
+
+@app.route('/admin/users/reset/<int:user_id>', methods=['POST'])
+def reset_password(user_id):
+    if not is_master():
+        return jsonify({"success": False, "error": "Unauthorized"})
+    user = User.query.get_or_404(user_id)
+    new_password = request.form.get('password', '').strip()
+    if not new_password:
+        return jsonify({"success": False, "error": "Password cannot be empty"})
+    user.set_password(new_password)
+    db.session.commit()
+    return jsonify({"success": True})
+
+@app.route('/admin/users/delete/<int:user_id>', methods=['POST'])
+def delete_user(user_id):
+    if not is_master():
+        return jsonify({"success": False, "error": "Unauthorized"})
+    user = User.query.get_or_404(user_id)
+    if user.role == 'master':
+        return jsonify({"success": False, "error": "Cannot delete master account"})
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({"success": True})
 
 # ─── ADMIN: PACKAGES ──────────────────────────────────────────────────────────
 @app.route('/admin/packages')
@@ -327,7 +383,14 @@ def api_drivers():
     return jsonify([d.to_dict() for d in Driver.query.all()])
 
 # ─── INIT ─────────────────────────────────────────────────────────────────────
-def seed_packages():
+def seed_data():
+    # Seed master admin
+    if not User.query.filter_by(username='admin').first():
+        admin = User(username='admin', role='master')
+        admin.set_password('1234')
+        db.session.add(admin)
+
+    # Seed default packages
     if Package.query.count() == 0:
         db.session.add_all([
             Package(name="Bronze", description="Basic package",                price=99.0,  max_guests=5),
@@ -335,11 +398,11 @@ def seed_packages():
             Package(name="Gold",   description="Premium package",              price=349.0, max_guests=20),
             Package(name="VIP",    description="All-inclusive VIP experience", price=599.0, max_guests=50),
         ])
-        db.session.commit()
+    db.session.commit()
 
 with app.app_context():
     db.create_all()
-    seed_packages()
+    seed_data()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)

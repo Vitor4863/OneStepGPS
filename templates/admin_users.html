@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ClubLifter - User Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #0d1117; color: white; font-family: 'Segoe UI', sans-serif; }
+        .card { background: #161b22; border: 1px solid #30363d; color: white; border-radius: 15px; }
+        .form-control { background: #0d1117; border: 1px solid #30363d; color: white; }
+        .form-control:focus { background: #0d1117; color: white; border-color: #a855f7; box-shadow: 0 0 10px rgba(168,85,247,0.4); }
+        .form-control::placeholder { color: #555; }
+        .btn-primary { background: linear-gradient(45deg, #a855f7, #6d28d9); border: none; font-weight: bold; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(168,85,247,0.4); }
+        .btn-outline-danger  { border-color: #dc3545; color: #dc3545; }
+        .btn-outline-danger:hover  { background: #dc3545; color: white; }
+        .btn-outline-warning { border-color: #ffc107; color: #ffc107; }
+        .btn-outline-warning:hover { background: #ffc107; color: #000; }
+        .text-primary { color: #a855f7 !important; }
+        .table { color: white; }
+        .table thead th { color: #8b949e; font-weight: 500; border-color: #30363d; }
+        .table td { border-color: #21262d; vertical-align: middle; }
+        .modal-content { background: #161b22; border: 1px solid #30363d; color: white; }
+        .modal-header, .modal-footer { border-color: #30363d; }
+        .nav-link { color: #8b949e; }
+        .nav-link:hover { color: #a855f7; }
+        .nav-link.active-page { color: #a855f7; font-weight: bold; }
+        #toast { position: fixed; bottom: 30px; right: 30px; z-index: 9999; min-width: 250px; display: none; }
+    </style>
+</head>
+<body class="py-5">
+<div class="container" style="max-width: 800px;">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="text-primary fw-bold mb-0">ClubLifter</h4>
+            <small class="text-secondary">Admin Panel</small>
+        </div>
+        <div class="d-flex gap-3 align-items-center">
+            <a href="/admin/packages" class="nav-link">Packages</a>
+            <a href="/admin/drivers"  class="nav-link">Drivers</a>
+            <a href="/admin/users"    class="nav-link active-page">Users</a>
+            <a href="/" class="btn btn-sm btn-outline-secondary">← Dashboard</a>
+        </div>
+    </div>
+
+    <!-- Add New User -->
+    <div class="card p-4 mb-4">
+        <h6 class="text-secondary mb-3">Create Promoter Account</h6>
+        <div class="row g-2">
+            <div class="col-md-4">
+                <input type="text" id="newUsername" class="form-control" placeholder="Username">
+            </div>
+            <div class="col-md-4">
+                <input type="password" id="newPassword" class="form-control" placeholder="Password">
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-primary w-100" onclick="addUser()">+ Create Account</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="card p-4">
+        <h6 class="text-secondary mb-3">Promoter Accounts</h6>
+        <table class="table table-dark table-sm">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="usersTable">
+                {% for u in users %}
+                <tr id="row-{{ u.id }}">
+                    <td class="fw-bold">{{ u.username }}</td>
+                    <td class="text-secondary">{{ u.role }}</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-warning me-1"
+                            onclick="openReset({{ u.id }}, '{{ u.username }}')">Reset Password</button>
+                        <button class="btn btn-sm btn-outline-danger"
+                            onclick="deleteUser({{ u.id }})">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if not users %}
+        <p class="text-secondary text-center small mt-2">No promoter accounts yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div class="modal fade" id="resetModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-primary">Reset Password</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="resetId">
+                <p class="text-secondary small mb-3">Setting new password for: <span id="resetUsername" class="text-white fw-bold"></span></p>
+                <div class="mb-3">
+                    <label class="small text-secondary">New Password</label>
+                    <input type="password" id="resetPassword" class="form-control" placeholder="Enter new password">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary" onclick="saveReset()">Save Password</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast align-items-center text-white border-0">
+    <div class="d-flex"><div class="toast-body" id="toastMsg"></div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const resetModal = new bootstrap.Modal(document.getElementById('resetModal'));
+
+    function showToast(msg, success = true) {
+        const t = document.getElementById('toast');
+        t.style.display = 'block';
+        t.style.background = success ? '#22c55e' : '#ef4444';
+        document.getElementById('toastMsg').innerText = msg;
+        setTimeout(() => t.style.display = 'none', 3000);
+    }
+
+    async function addUser() {
+        const username = document.getElementById('newUsername').value.trim();
+        const password = document.getElementById('newPassword').value.trim();
+        if (!username || !password) return showToast('Username and password are required', false);
+        const fd = new FormData();
+        fd.append('username', username);
+        fd.append('password', password);
+        const data = await (await fetch('/admin/users/new', { method: 'POST', body: fd })).json();
+        if (data.success) { showToast('Account created!'); location.reload(); }
+        else showToast(data.error, false);
+    }
+
+    function openReset(id, username) {
+        document.getElementById('resetId').value       = id;
+        document.getElementById('resetUsername').innerText = username;
+        document.getElementById('resetPassword').value = '';
+        resetModal.show();
+    }
+
+    async function saveReset() {
+        const id  = document.getElementById('resetId').value;
+        const pwd = document.getElementById('resetPassword').value.trim();
+        if (!pwd) return showToast('Password cannot be empty', false);
+        const fd = new FormData();
+        fd.append('password', pwd);
+        const data = await (await fetch(`/admin/users/reset/${id}`, { method: 'POST', body: fd })).json();
+        if (data.success) { showToast('Password updated!'); resetModal.hide(); }
+        else showToast(data.error, false);
+    }
+
+    async function deleteUser(id) {
+        if (!confirm('Delete this promoter account?')) return;
+        const data = await (await fetch(`/admin/users/delete/${id}`, { method: 'POST' })).json();
+        if (data.success) { showToast('Account deleted!'); document.getElementById(`row-${id}`).remove(); }
+        else showToast(data.error, false);
+    }
+</script>
+</body>
+</html>

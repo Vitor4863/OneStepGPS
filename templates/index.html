@@ -13,7 +13,6 @@
         .form-control, .form-select { background: #0d1117; border: 1px solid #30363d; color: white; }
         .form-control:focus, .form-select:focus { background: #0d1117; color: white; border-color: #a855f7; box-shadow: 0 0 10px rgba(168,85,247,0.4); }
         .form-select option { background: #161b22; color: white; }
-        input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(1); }
         .btn-primary { background: linear-gradient(45deg, #a855f7, #6d28d9); border: none; font-weight: bold; transition: 0.3s; }
         .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(168,85,247,0.4); }
         .btn-logout { background: transparent; border: 1px solid #30363d; color: #8b949e; font-size: 0.8rem; transition: 0.2s; }
@@ -28,6 +27,10 @@
         .driver-result { background: rgba(168,85,247,0.08); border: 1px solid rgba(168,85,247,0.3); border-radius: 10px; padding: 10px 14px; margin-top: 10px; display: none; }
         .driver-result .driver-name  { font-weight: bold; color: #a855f7; }
         .driver-result .driver-phone { color: #22c55e; font-size: 0.9rem; }
+        /* US datetime styling */
+        .datetime-row { display: flex; gap: 8px; }
+        .datetime-row .form-control { flex: 1; }
+        select.form-control option { background: #161b22; }
     </style>
 </head>
 <body class="py-4">
@@ -42,8 +45,9 @@
                     <h4 class="text-primary fw-bold mb-0">ClubLifter</h4>
                     <div class="d-flex gap-2 align-items-center">
                         {% if session.get('role') == 'master' %}
-                        <a href="/admin/packages" class="admin-link">⚙</a>
-                        <a href="/admin/drivers"  class="admin-link">🚗</a>
+                        <a href="/admin/packages" class="admin-link">Packages</a>
+                        <a href="/admin/drivers"  class="admin-link">Drivers</a>
+                        <a href="/admin/users"    class="admin-link">Users</a>
                         {% endif %}
                         <a href="/logout" class="btn btn-logout btn-sm px-2">Logout</a>
                     </div>
@@ -56,7 +60,7 @@
                     </div>
                     <div class="mb-2">
                         <label class="small text-secondary">Postal Code or ZIP Code</label>
-                        <input type="text" name="cep" class="form-control" placeholder="24020350 or 10036" required>
+                        <input type="text" name="cep" class="form-control" placeholder="e.g., 89109" required>
                     </div>
                     <div class="mb-2">
                         <label class="small text-secondary">Street Number</label>
@@ -75,11 +79,41 @@
                         <label class="small text-secondary">Number of Guests</label>
                         <input type="number" name="guests" class="form-control" placeholder="e.g., 10" min="1" required>
                     </div>
+
+                    <!-- US Format Date & Time -->
                     <div class="mb-3">
                         <label class="small text-secondary">Pickup Date & Time</label>
-                        <input type="datetime-local" name="pickup_datetime" class="form-control" required>
+                        <div class="datetime-row">
+                            <!-- Date: MM/DD/YYYY -->
+                            <input type="text" name="pickup_date" id="pickupDate" class="form-control"
+                                placeholder="MM/DD/YYYY" maxlength="10"
+                                pattern="\d{2}/\d{2}/\d{4}" required>
+                            <!-- Hour -->
+                            <select name="pickup_hour" class="form-control form-select" style="max-width:75px;" required>
+                                <option value="" disabled selected>Hr</option>
+                                {% for h in range(1,13) %}
+                                <option value="{{ '%02d'|format(h) }}">{{ '%02d'|format(h) }}</option>
+                                {% endfor %}
+                            </select>
+                            <!-- Minute -->
+                            <select name="pickup_min" class="form-control form-select" style="max-width:75px;" required>
+                                <option value="" disabled selected>Min</option>
+                                <option value="00">00</option>
+                                <option value="15">15</option>
+                                <option value="30">30</option>
+                                <option value="45">45</option>
+                            </select>
+                            <!-- AM/PM -->
+                            <select name="pickup_ampm" class="form-control form-select" style="max-width:75px;" required>
+                                <option value="" disabled selected>—</option>
+                                <option value="AM">AM</option>
+                                <option value="PM">PM</option>
+                            </select>
+                        </div>
+                        <div class="small text-secondary mt-1" id="dateError" style="color:#ef4444!important;display:none;">Invalid date format</div>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100 py-2">GENERATE NAVIGATION ROUTE</button>
+
+                    <button type="submit" class="btn btn-primary w-100 py-2">SCHEDULE CLIENT PICKUP</button>
                 </form>
 
                 <!-- Driver result box -->
@@ -95,7 +129,7 @@
 
             <!-- History -->
             <div class="card p-3 shadow">
-                <h6 class="text-secondary border-bottom border-secondary pb-2 mb-2">Delivery History</h6>
+                <h6 class="text-secondary border-bottom border-secondary pb-2 mb-2">Pickup History</h6>
                 <div class="sidebar-scroll">
                     <table class="table table-dark table-sm small" id="tabelaDados">
                         <thead><tr><th>Customer</th><th>Package</th><th>Guests</th><th class="text-end">Distance</th></tr></thead>
@@ -123,7 +157,15 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
 <script>
-    var map = L.map('map').setView([-22.8833, -43.1033], 13);
+    // Auto-format date input as MM/DD/YYYY
+    document.getElementById('pickupDate').addEventListener('input', function(e) {
+        let v = e.target.value.replace(/\D/g, '');
+        if (v.length >= 3 && v.length <= 4) v = v.slice(0,2) + '/' + v.slice(2);
+        else if (v.length > 4) v = v.slice(0,2) + '/' + v.slice(2,4) + '/' + v.slice(4,8);
+        e.target.value = v;
+    });
+
+    var map = L.map('map').setView([36.1699, -115.1398], 12); // Las Vegas
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '© ClubLifter Logistics'
     }).addTo(map);
@@ -136,8 +178,21 @@
         const status   = document.getElementById('status');
         const formData = new FormData(e.target);
 
+        // Validate date
+        const dateVal = formData.get('pickup_date');
+        const dateRegex = /^\d{2}\/\d{2}\/\d{4}$/;
+        if (!dateRegex.test(dateVal)) {
+            document.getElementById('dateError').style.display = 'block';
+            return;
+        }
+        document.getElementById('dateError').style.display = 'none';
+
+        // Combine into single pickup_datetime string
+        const pickup_datetime = `${formData.get('pickup_date')} ${formData.get('pickup_hour')}:${formData.get('pickup_min')} ${formData.get('pickup_ampm')}`;
+        formData.append('pickup_datetime', pickup_datetime);
+
         status.className = "mt-3 small fw-bold text-center text-info";
-        status.innerHTML = "⏳ Calculating optimal route...";
+        status.innerHTML = "⏳ Scheduling client pickup...";
         document.getElementById('driverResult').style.display = 'none';
 
         try {
@@ -161,7 +216,7 @@
                     show: false,
                     addWaypoints: false,
                     createMarker: function(i, wp) {
-                        const icon  = i === 0 ? "🚚" : "📍";
+                        const icon  = i === 0 ? "🚗" : "📍";
                         const label = i === 0 ? "Driver" : (data.nome || formData.get('nome'));
                         return L.marker(wp.latLng).bindPopup(`<b>${icon} ${label}</b>`);
                     }
@@ -173,7 +228,7 @@
                 });
 
                 rotaAtual.on('routesfound', function() {
-                    status.innerHTML = "<span class='text-success'>✅ Ground route optimized!</span>";
+                    status.innerHTML = "<span class='text-success'>✅ Pickup scheduled successfully!</span>";
                 });
 
                 map.flyToBounds([p_mot, p_cli], { padding: [100, 100], duration: 1.5 });
