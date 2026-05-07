@@ -4,213 +4,253 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ClubLifter - Package Management</title>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background: #0d1117; color: white; font-family: 'Segoe UI', sans-serif; }
-        .card { background: #161b22; border: 1px solid #30363d; color: white; border-radius: 15px; }
-        .form-control, .form-select { background: #0d1117; border: 1px solid #30363d; color: white; }
-        .form-control:focus, .form-select:focus { background: #0d1117; color: white; border-color: #a855f7; box-shadow: 0 0 10px rgba(168,85,247,0.4); }
-        .form-control::placeholder { color: #555; }
-        .btn-primary { background: linear-gradient(45deg, #a855f7, #6d28d9); border: none; font-weight: bold; }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(168,85,247,0.4); }
-        .btn-outline-danger { border-color: #dc3545; color: #dc3545; }
-        .btn-outline-danger:hover { background: #dc3545; color: white; }
-        .btn-outline-warning { border-color: #ffc107; color: #ffc107; }
-        .btn-outline-warning:hover { background: #ffc107; color: #000; }
-        .text-primary { color: #a855f7 !important; }
-        .badge-active { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid #22c55e; border-radius: 20px; padding: 3px 12px; font-size: 0.75rem; }
-        .badge-inactive { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid #ef4444; border-radius: 20px; padding: 3px 12px; font-size: 0.75rem; }
-        .package-row { transition: background 0.2s; }
-        .package-row:hover { background: rgba(168,85,247,0.05); }
-        .modal-content { background: #161b22; border: 1px solid #30363d; color: white; }
-        .modal-header { border-bottom: 1px solid #30363d; }
-        .modal-footer { border-top: 1px solid #30363d; }
-        .table { color: white; }
-        .table thead th { color: #8b949e; font-weight: 500; border-color: #30363d; }
-        .table td { border-color: #21262d; vertical-align: middle; }
-        #toast { position: fixed; bottom: 30px; right: 30px; z-index: 9999; min-width: 250px; }
+        :root{--bg:#080b12;--s:#0f1420;--s2:#161d2e;--s3:#0d1117;--bd:rgba(255,255,255,.07);--bhi:rgba(138,92,246,.45);--acc:#8a5cf6;--acc2:#6d28d9;--g:#22c55e;--r:#ef4444;--gold:#fbbf24;--t:#e8eaf0;--m:#5a6270;--m2:#8892a0;}
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;min-height:100vh;padding:14px;}
+        .wrap{max-width:1050px;margin:0 auto;}
+        .topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;margin-bottom:18px;background:var(--s);border:1px solid var(--bd);border-radius:14px;gap:10px;flex-wrap:wrap;}
+        .brand{font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem;color:var(--acc);}
+        .brand span{color:var(--t);}
+        .nav-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+        .pill{font-size:.72rem;font-weight:600;color:var(--m2);text-decoration:none;padding:5px 11px;border-radius:20px;border:1px solid var(--bd);transition:.2s;white-space:nowrap;}
+        .pill:hover,.pill.act{color:var(--acc);border-color:var(--bhi);background:rgba(138,92,246,.08);}
+        .btn-db{font-size:.72rem;font-weight:600;color:var(--m2);padding:5px 11px;border-radius:10px;border:1px solid var(--bd);background:none;cursor:pointer;text-decoration:none;transition:.2s;}
+        .btn-db:hover{color:var(--t);}
+        .m-nav{display:none;gap:6px;overflow-x:auto;padding:0 2px 12px;scrollbar-width:none;}
+        .m-nav::-webkit-scrollbar{display:none;}
+        .m-nav a{font-size:.72rem;font-weight:600;color:var(--m2);text-decoration:none;padding:6px 13px;border-radius:20px;border:1px solid var(--bd);white-space:nowrap;flex-shrink:0;transition:.2s;}
+        .m-nav a.act{color:var(--acc);border-color:var(--bhi);}
+        .card{background:var(--s);border:1px solid var(--bd);border-radius:16px;padding:20px;margin-bottom:16px;}
+        .ctitle{font-family:'Syne',sans-serif;font-size:.75rem;font-weight:700;color:var(--m);text-transform:uppercase;letter-spacing:1.3px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--bd);}
+        .form-grid{display:grid;grid-template-columns:1fr 1fr 90px 90px 1fr auto;gap:8px;align-items:end;}
+        .f label{display:block;font-size:.69rem;font-weight:600;color:var(--m);text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px;}
+        .fc,.fs{width:100%;background:var(--s3);border:1px solid var(--bd);color:var(--t);border-radius:10px;padding:9px 13px;font-size:.85rem;font-family:'DM Sans',sans-serif;transition:.2s;appearance:none;}
+        .fc::placeholder{color:var(--m);}
+        .fc:focus,.fs:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px rgba(138,92,246,.13);}
+        .fs{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7'%3E%3Cpath fill='%238892a0' d='M5 7L0 0h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:30px;}
+        .fs option{background:var(--s2);}
+        .shopify-hint{font-size:.7rem;color:var(--m);margin-top:5px;}
+        .shopify-hint a{color:var(--acc);text-decoration:none;}
+        .btn-add{background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;color:#fff;font-family:'Syne',sans-serif;font-weight:700;font-size:.82rem;border-radius:10px;padding:9px 18px;cursor:pointer;white-space:nowrap;transition:.2s;}
+        .btn-add:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(138,92,246,.4);}
+        .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+        table{width:100%;border-collapse:collapse;font-size:.83rem;min-width:600px;}
+        thead th{color:var(--m2);font-weight:600;font-size:.68rem;text-transform:uppercase;letter-spacing:.7px;padding:9px 12px;border-bottom:1px solid var(--bd);}
+        tbody td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--m2);vertical-align:middle;}
+        tbody tr:last-child td{border-bottom:none;}
+        tbody tr:hover td{background:rgba(138,92,246,.04);}
+        td.name{color:var(--t);font-weight:600;}
+        .b-on{background:rgba(34,197,94,.1);color:var(--g);border:1px solid rgba(34,197,94,.35);border-radius:14px;padding:2px 10px;font-size:.7rem;font-weight:700;}
+        .b-off{background:rgba(239,68,68,.1);color:var(--r);border:1px solid rgba(239,68,68,.35);border-radius:14px;padding:2px 10px;font-size:.7rem;font-weight:700;}
+        .b-shopify{background:rgba(149,191,71,.1);color:#95bf47;border:1px solid rgba(149,191,71,.35);border-radius:14px;padding:2px 10px;font-size:.7rem;font-weight:700;}
+        .b-noshopify{background:rgba(90,98,112,.1);color:var(--m);border:1px solid rgba(90,98,112,.35);border-radius:14px;padding:2px 10px;font-size:.7rem;}
+        .btns{display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap;}
+        .btn-e{background:none;border:1px solid #ffc107;color:#ffc107;font-size:.71rem;font-weight:600;border-radius:8px;padding:5px 10px;cursor:pointer;transition:.2s;}
+        .btn-e:hover{background:#ffc107;color:#000;}
+        .btn-d{background:none;border:1px solid var(--r);color:var(--r);font-size:.71rem;font-weight:600;border-radius:8px;padding:5px 10px;cursor:pointer;transition:.2s;}
+        .btn-d:hover{background:var(--r);color:#fff;}
+        .modal-content{background:var(--s);border:1px solid var(--bd);color:var(--t);border-radius:16px;}
+        .modal-header,.modal-footer{border-color:var(--bd);}
+        .modal-title{font-family:'Syne',sans-serif;font-weight:700;color:var(--acc);}
+        .btn-close-white{filter:invert(1);}
+        .btn-save{background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;color:#fff;font-weight:700;border-radius:10px;padding:8px 20px;cursor:pointer;}
+        .modal-f{display:flex;flex-direction:column;gap:14px;}
+        #toast{position:fixed;bottom:16px;right:14px;left:14px;max-width:380px;margin:0 auto;z-index:9999;display:none;border-radius:11px;padding:12px 16px;font-weight:600;font-size:.85rem;box-shadow:0 8px 24px rgba(0,0,0,.5);}
+        @media(max-width:800px){
+            .form-grid{grid-template-columns:1fr 1fr;}
+            .pills-desk{display:none;}
+            .m-nav{display:flex;}
+        }
+        @media(max-width:480px){
+            .form-grid{grid-template-columns:1fr;}
+            .topbar{padding:10px 12px;border-radius:11px;}
+            .card{padding:14px;}
+        }
     </style>
 </head>
-<body class="py-5">
-
-<div class="container" style="max-width: 900px;">
-
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h4 class="text-primary fw-bold mb-0">ClubLifter</h4>
-            <small class="text-secondary">Package Management</small>
-        </div>
-        <a href="/" class="btn btn-sm btn-outline-secondary">← Back to Dashboard</a>
-    </div>
-
-    <!-- Add New Package -->
-    <div class="card p-4 mb-4">
-        <h6 class="text-secondary mb-3">Add New Package</h6>
-        <div class="row g-2">
-            <div class="col-md-4">
-                <input type="text" id="newName" class="form-control" placeholder="Package name">
+<body>
+<div class="wrap">
+    <div class="topbar">
+        <div class="brand">Club<span>Lifter</span></div>
+        <div class="nav-r">
+            <div class="pills-desk" style="display:flex;gap:7px;">
+                <a href="/admin/today"    class="pill">Today</a>
+                <a href="/admin/packages" class="pill act">Packages</a>
+                <a href="/admin/drivers"  class="pill">Drivers</a>
+                <a href="/admin/users"    class="pill">Users</a>
+                <a href="/admin/clubs"    class="pill">Clubs</a>
             </div>
-            <div class="col-md-4">
-                <input type="text" id="newDesc" class="form-control" placeholder="Description">
-            </div>
-            <div class="col-md-2">
-                <input type="number" id="newPrice" class="form-control" placeholder="Price ($)" min="0">
-            </div>
-            <div class="col-md-2">
-                <button class="btn btn-primary w-100" onclick="addPackage()">+ Add</button>
-            </div>
+            <a href="/" class="btn-db">← Dashboard</a>
         </div>
     </div>
+    <div class="m-nav">
+        <a href="/admin/today">Today</a>
+        <a href="/admin/packages" class="act">Packages</a>
+        <a href="/admin/drivers">Drivers</a>
+        <a href="/admin/users">Users</a>
+        <a href="/admin/clubs">Clubs</a>
+        <a href="/">← Dashboard</a>
+    </div>
 
-    <!-- Packages Table -->
-    <div class="card p-4">
-        <h6 class="text-secondary mb-3">Existing Packages</h6>
-        <table class="table table-dark table-sm">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Description</th>
-                    <th>Price</th>
-                    <th>Status</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody id="packagesTable">
-                {% for p in packages %}
-                <tr class="package-row" id="row-{{ p.id }}">
-                    <td class="fw-bold">{{ p.name }}</td>
-                    <td class="text-secondary">{{ p.description }}</td>
-                    <td class="text-primary">${{ "%.2f"|format(p.price) }}</td>
-                    <td><span class="{{ 'badge-active' if p.active else 'badge-inactive' }}">{{ 'Active' if p.active else 'Inactive' }}</span></td>
-                    <td class="text-end">
-                        <button class="btn btn-sm btn-outline-warning me-1" onclick="openEdit({{ p.id }}, '{{ p.name }}', '{{ p.description }}', {{ p.price }}, {{ p.active|lower }})">Edit</button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deletePackage({{ p.id }})">Delete</button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <!-- ADD PACKAGE -->
+    <div class="card">
+        <div class="ctitle">Add New Package</div>
+        <div class="form-grid">
+            <div class="f"><label>Name</label><input type="text" id="newName" class="fc" placeholder="e.g. Gold"></div>
+            <div class="f"><label>Description</label><input type="text" id="newDesc" class="fc" placeholder="What's included"></div>
+            <div class="f"><label>Price ($)</label><input type="number" id="newPrice" class="fc" placeholder="0" min="0"></div>
+            <div class="f"><label>Max Guests</label><input type="number" id="newMaxGuests" class="fc" placeholder="0" min="0"></div>
+            <div class="f">
+                <label>Shopify Variant ID</label>
+                <input type="text" id="newVariant" class="fc" placeholder="e.g. 44123456789">
+                <div class="shopify-hint">Found in Shopify Admin → Products → variant URL</div>
+            </div>
+            <div class="f" style="display:flex;align-items:flex-end;">
+                <button class="btn-add w-100" onclick="addPackage()">+ Add</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PACKAGES TABLE -->
+    <div class="card">
+        <div class="ctitle">Existing Packages</div>
+        <div class="tbl-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Price</th>
+                        <th>Max Guests</th>
+                        <th>Shopify</th>
+                        <th>Status</th>
+                        <th style="text-align:right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="packagesTable">
+                    {% for p in packages %}
+                    <tr id="row-{{ p.id }}">
+                        <td class="name">{{ p.name }}</td>
+                        <td style="color:var(--m2);font-size:.8rem;">{{ p.description or '—' }}</td>
+                        <td style="color:var(--acc);font-weight:600;">${{ "%.2f"|format(p.price) }}</td>
+                        <td>{{ p.max_guests or '—' }}</td>
+                        <td>
+                            {% if p.shopify_variant_id %}
+                            <span class="b-shopify">✓ Linked</span>
+                            {% else %}
+                            <span class="b-noshopify">Not linked</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="{{ 'b-on' if p.active else 'b-off' }}">{{ 'Active' if p.active else 'Inactive' }}</span></td>
+                        <td><div class="btns">
+                            <button class="btn-e" onclick="openEdit({{ p.id }}, '{{ p.name }}', '{{ p.description }}', {{ p.price }}, {{ p.max_guests }}, {{ p.active|lower }}, '{{ p.shopify_variant_id or '' }}')">Edit</button>
+                            <button class="btn-d" onclick="delPackage({{ p.id }})">Delete</button>
+                        </div></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
 <!-- Edit Modal -->
 <div class="modal fade" id="editModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title text-primary">Edit Package</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="editId">
-                <div class="mb-3">
-                    <label class="small text-secondary">Name</label>
-                    <input type="text" id="editName" class="form-control">
-                </div>
-                <div class="mb-3">
-                    <label class="small text-secondary">Description</label>
-                    <input type="text" id="editDesc" class="form-control">
-                </div>
-                <div class="mb-3">
-                    <label class="small text-secondary">Price ($)</label>
-                    <input type="number" id="editPrice" class="form-control" min="0">
-                </div>
-                <div class="mb-3">
-                    <label class="small text-secondary">Status</label>
-                    <select id="editActive" class="form-control form-select">
-                        <option value="true">Active</option>
-                        <option value="false">Inactive</option>
-                    </select>
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Edit Package</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body modal-f">
+            <input type="hidden" id="eId">
+            <div class="f"><label>Name</label><input type="text" id="eName" class="fc"></div>
+            <div class="f"><label>Description</label><input type="text" id="eDesc" class="fc"></div>
+            <div class="f"><label>Price ($)</label><input type="number" id="ePrice" class="fc" min="0"></div>
+            <div class="f"><label>Max Guests</label><input type="number" id="eMaxGuests" class="fc" min="0"></div>
+            <div class="f">
+                <label>Shopify Variant ID</label>
+                <input type="text" id="eVariant" class="fc" placeholder="e.g. 44123456789">
+                <div class="shopify-hint">
+                    Find it in: Shopify Admin → Products → click product → click variant → copy ID from URL<br>
+                    URL looks like: <code style="color:var(--acc)">/variants/<strong>44123456789</strong></code>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+            <div class="f"><label>Status</label>
+                <select id="eActive" class="fs" style="background:var(--s3);">
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                </select>
             </div>
         </div>
-    </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button class="btn-save" onclick="saveEdit()">Save Changes</button>
+        </div>
+    </div></div>
 </div>
 
-<!-- Toast -->
-<div id="toast" class="toast align-items-center text-white border-0" role="alert" style="display:none;">
-    <div class="d-flex">
-        <div class="toast-body" id="toastMsg"></div>
-    </div>
-</div>
-
+<div id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    const editModal = new bootstrap.Modal(document.getElementById('editModal'));
+const modal = new bootstrap.Modal(document.getElementById('editModal'));
 
-    function showToast(msg, success = true) {
-        const t = document.getElementById('toast');
-        t.style.display = 'block';
-        t.style.background = success ? '#22c55e' : '#ef4444';
-        document.getElementById('toastMsg').innerText = msg;
-        setTimeout(() => t.style.display = 'none', 3000);
-    }
+function toast(m, ok=true) {
+    const t = document.getElementById('toast');
+    t.style.display = 'block';
+    t.style.background = ok ? '#16a34a' : '#dc2626';
+    t.style.color = '#fff';
+    t.innerText = m;
+    setTimeout(() => t.style.display = 'none', 3000);
+}
 
-    async function addPackage() {
-        const name  = document.getElementById('newName').value.trim();
-        const desc  = document.getElementById('newDesc').value.trim();
-        const price = document.getElementById('newPrice').value || 0;
-        if (!name) return showToast('Name is required', false);
+async function addPackage() {
+    const name = document.getElementById('newName').value.trim();
+    if (!name) return toast('Name is required', false);
+    const fd = new FormData();
+    fd.append('name',               name);
+    fd.append('description',        document.getElementById('newDesc').value.trim());
+    fd.append('price',              document.getElementById('newPrice').value || 0);
+    fd.append('max_guests',         document.getElementById('newMaxGuests').value || 0);
+    fd.append('shopify_variant_id', document.getElementById('newVariant').value.trim());
+    const d = await (await fetch('/admin/packages/new', { method: 'POST', body: fd })).json();
+    if (d.success) { toast('Package added!'); location.reload(); }
+    else toast(d.error, false);
+}
 
-        const fd = new FormData();
-        fd.append('name', name);
-        fd.append('description', desc);
-        fd.append('price', price);
+function openEdit(id, name, desc, price, maxGuests, active, variantId) {
+    document.getElementById('eId').value        = id;
+    document.getElementById('eName').value      = name;
+    document.getElementById('eDesc').value      = desc;
+    document.getElementById('ePrice').value     = price;
+    document.getElementById('eMaxGuests').value = maxGuests;
+    document.getElementById('eActive').value    = active.toString();
+    document.getElementById('eVariant').value   = variantId;
+    modal.show();
+}
 
-        const res  = await fetch('/admin/packages/new', { method: 'POST', body: fd });
-        const data = await res.json();
-        if (data.success) {
-            showToast('Package added!');
-            location.reload();
-        } else {
-            showToast(data.error, false);
-        }
-    }
+async function saveEdit() {
+    const id = document.getElementById('eId').value;
+    const fd = new FormData();
+    fd.append('name',               document.getElementById('eName').value);
+    fd.append('description',        document.getElementById('eDesc').value);
+    fd.append('price',              document.getElementById('ePrice').value);
+    fd.append('max_guests',         document.getElementById('eMaxGuests').value);
+    fd.append('active',             document.getElementById('eActive').value);
+    fd.append('shopify_variant_id', document.getElementById('eVariant').value.trim());
+    const d = await (await fetch(`/admin/packages/edit/${id}`, { method: 'POST', body: fd })).json();
+    if (d.success) { toast('Package updated!'); modal.hide(); location.reload(); }
+    else toast(d.error, false);
+}
 
-    function openEdit(id, name, desc, price, active) {
-        document.getElementById('editId').value    = id;
-        document.getElementById('editName').value  = name;
-        document.getElementById('editDesc').value  = desc;
-        document.getElementById('editPrice').value = price;
-        document.getElementById('editActive').value = active.toString();
-        editModal.show();
-    }
-
-    async function saveEdit() {
-        const id    = document.getElementById('editId').value;
-        const fd    = new FormData();
-        fd.append('name',        document.getElementById('editName').value);
-        fd.append('description', document.getElementById('editDesc').value);
-        fd.append('price',       document.getElementById('editPrice').value);
-        fd.append('active',      document.getElementById('editActive').value);
-
-        const res  = await fetch(`/admin/packages/edit/${id}`, { method: 'POST', body: fd });
-        const data = await res.json();
-        if (data.success) {
-            showToast('Package updated!');
-            editModal.hide();
-            location.reload();
-        } else {
-            showToast(data.error, false);
-        }
-    }
-
-    async function deletePackage(id) {
-        if (!confirm('Are you sure you want to delete this package?')) return;
-        const res  = await fetch(`/admin/packages/delete/${id}`, { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-            showToast('Package deleted!');
-            document.getElementById(`row-${id}`).remove();
-        } else {
-            showToast(data.error, false);
-        }
-    }
+async function delPackage(id) {
+    if (!confirm('Delete this package?')) return;
+    const d = await (await fetch(`/admin/packages/delete/${id}`, { method: 'POST' })).json();
+    if (d.success) { toast('Deleted!'); document.getElementById(`row-${id}`).remove(); }
+    else toast(d.error, false);
+}
 </script>
 </body>
 </html>

@@ -26,6 +26,101 @@ API_KEY      = "cWpVu8yTfVRytZRt95Tnkv_VmBfUywfg_oT-GkqGzlI"
 URL_API      = "https://track.onestepgps.com/v3/api/public/marker"
 MAKE_WEBHOOK = "https://hook.us1.make.com/1j3rppk5wufvglcbe23kto5c63uvdt32"
 
+# ─── SHOPIFY ──────────────────────────────────────────────────────────────────
+SHOPIFY_STORE   = "vip-packages.myshopify.com"
+SHOPIFY_TOKEN   = "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"
+SHOPIFY_API_VER = "2026-04"
+SHOPIFY_HEADERS = {
+    "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+    "Content-Type": "application/json"
+}
+
+# Map ClubLifter package names → Shopify Product ID
+# Add more packages here as needed: "Package Name": variant_id
+SHOPIFY_VARIANT_MAP = {
+    # Product ID 8213478408449 — Kings of Hustler Las Vegas FREE ENTRY PASS ($0.00 test)
+    # We fetch the first variant automatically below
+}
+
+def get_shopify_variant_id(product_id: int) -> str | None:
+    """Fetch the default variant ID for a given Shopify product ID."""
+    try:
+        url = f"https://{SHOPIFY_STORE}/admin/api/{SHOPIFY_API_VER}/products/{product_id}/variants.json"
+        res = requests.get(url, headers=SHOPIFY_HEADERS, timeout=5).json()
+        variants = res.get("variants", [])
+        if variants:
+            return str(variants[0]["id"])
+    except Exception:
+        pass
+    return None
+
+def create_shopify_order(customer_name: str, customer_phone: str,
+                          package_name: str, guests: int,
+                          pickup_datetime: str, destination: str,
+                          driver_name: str) -> dict:
+    """
+    Create a Shopify order for the given customer and package.
+    Returns the Shopify order dict or an error dict.
+    """
+    try:
+        # Look up variant ID from DB package, then map, then fall back to test product
+        pkg_obj    = Package.query.filter_by(name=package_name).first()
+        variant_id = (pkg_obj.shopify_variant_id or "").strip() if pkg_obj else ""
+        if not variant_id:
+            variant_id = SHOPIFY_VARIANT_MAP.get(package_name, "")
+        if not variant_id:
+            # Fall back to the $0.00 test product
+            variant_id = get_shopify_variant_id(8213478408449)
+        if not variant_id:
+            return {"error": "Shopify variant not found"}
+
+        # Split name
+        parts      = customer_name.strip().split(" ", 1)
+        first_name = parts[0]
+        last_name  = parts[1] if len(parts) > 1 else ""
+
+        order_payload = {
+            "order": {
+                "line_items": [
+                    {
+                        "variant_id": variant_id,
+                        "quantity":   1,
+                        "title":      package_name,
+                    }
+                ],
+                "customer": {
+                    "first_name": first_name,
+                    "last_name":  last_name,
+                    "phone":      customer_phone or None,
+                },
+                "note": (
+                    f"Pickup: {pickup_datetime} | "
+                    f"Destination: {destination} | "
+                    f"Guests: {guests} | "
+                    f"Driver: {driver_name}"
+                ),
+                "financial_status": "paid",
+                "send_receipt":     False,
+                "tags":             "clublifter,pickup",
+            }
+        }
+
+        url = f"https://{SHOPIFY_STORE}/admin/api/{SHOPIFY_API_VER}/orders.json"
+        res = requests.post(url, json=order_payload, headers=SHOPIFY_HEADERS, timeout=10)
+        data = res.json()
+
+        if "order" in data:
+            return {
+                "shopify_order_id":     data["order"]["id"],
+                "shopify_order_number": data["order"]["order_number"],
+                "shopify_order_url":    f"https://{SHOPIFY_STORE}/admin/orders/{data['order']['id']}"
+            }
+        else:
+            return {"error": str(data)}
+
+    except Exception as e:
+        return {"error": str(e)}
+
 # ─── MODELS ───────────────────────────────────────────────────────────────────
 class User(db.Model):
     id            = db.Column(db.Integer, primary_key=True)
@@ -59,17 +154,19 @@ class Club(db.Model):
         return {"id": self.id, "name": self.name, "address": self.address, "active": self.active}
 
 class Package(db.Model):
-    id          = db.Column(db.Integer, primary_key=True)
-    name        = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.String(255), default="")
-    price       = db.Column(db.Float, default=0.0)
-    max_guests  = db.Column(db.Integer, default=0)
-    active      = db.Column(db.Boolean, default=True)
+    id                 = db.Column(db.Integer, primary_key=True)
+    name               = db.Column(db.String(100), nullable=False)
+    description        = db.Column(db.String(255), default="")
+    price              = db.Column(db.Float, default=0.0)
+    max_guests         = db.Column(db.Integer, default=0)
+    active             = db.Column(db.Boolean, default=True)
+    shopify_variant_id = db.Column(db.String(50), default="")
 
     def to_dict(self):
         return {
             "id": self.id, "name": self.name, "description": self.description,
-            "price": self.price, "max_guests": self.max_guests, "active": self.active
+            "price": self.price, "max_guests": self.max_guests, "active": self.active,
+            "shopify_variant_id": self.shopify_variant_id
         }
 
 class Driver(db.Model):
@@ -315,21 +412,35 @@ def cadastrar_cep():
         db.session.add(customer)
         db.session.commit()
 
-        # 7. FIRE MAKE.COM WEBHOOK
+        # 7. CREATE SHOPIFY ORDER
+        shopify_result = create_shopify_order(
+            customer_name   = nome,
+            customer_phone  = client_phone,
+            package_name    = package,
+            guests          = guests,
+            pickup_datetime = pickup_datetime,
+            destination     = destination,
+            driver_name     = melhor_v
+        )
+
+        # 8. FIRE MAKE.COM WEBHOOK
         fire_webhook({
-            "customer_id":     customer.id,
-            "driver_name":     melhor_v,
-            "driver_phone":    motorista_phone,
-            "customer_name":   nome,
-            "customer_phone":  client_phone,
-            "pickup_address":  endereco_completo,
-            "details":         details,
-            "pickup_datetime": pickup_datetime,
-            "package":         package,
-            "guests":          guests,
-            "distance_km":     distancia_arredondada,
-            "destination":     destination,
-            "status":          "scheduled"
+            "customer_id":          customer.id,
+            "driver_name":          melhor_v,
+            "driver_phone":         motorista_phone,
+            "customer_name":        nome,
+            "customer_phone":       client_phone,
+            "pickup_address":       endereco_completo,
+            "details":              details,
+            "pickup_datetime":      pickup_datetime,
+            "package":              package,
+            "guests":               guests,
+            "distance_km":          distancia_arredondada,
+            "destination":          destination,
+            "status":               "scheduled",
+            "shopify_order_id":     shopify_result.get("shopify_order_id"),
+            "shopify_order_number": shopify_result.get("shopify_order_number"),
+            "shopify_order_url":    shopify_result.get("shopify_order_url"),
         })
 
         return jsonify({
@@ -338,7 +449,11 @@ def cadastrar_cep():
             "cliente_coords": {"lat": lat_cli, "lng": lng_cli},
             "motorista_coords": motorista_coords,
             "package": package, "guests": guests, "pickup_datetime": pickup_datetime,
-            "destination": destination
+            "destination": destination,
+            "shopify_order_id":     shopify_result.get("shopify_order_id"),
+            "shopify_order_number": shopify_result.get("shopify_order_number"),
+            "shopify_order_url":    shopify_result.get("shopify_order_url"),
+            "shopify_error":        shopify_result.get("error"),
         })
 
     except Exception as e:
@@ -494,7 +609,8 @@ def new_package():
     name = request.form.get('name', '').strip()
     if not name: return jsonify({"success": False, "error": "Name is required"})
     pkg = Package(name=name, description=request.form.get('description','').strip(),
-                  price=float(request.form.get('price',0)), max_guests=int(request.form.get('max_guests',0)))
+                  price=float(request.form.get('price',0)), max_guests=int(request.form.get('max_guests',0)),
+                  shopify_variant_id=request.form.get('shopify_variant_id','').strip())
     db.session.add(pkg); db.session.commit()
     return jsonify({"success": True, "package": pkg.to_dict()})
 
@@ -502,11 +618,12 @@ def new_package():
 def edit_package(pkg_id):
     if not is_master(): return jsonify({"success": False, "error": "Unauthorized"})
     pkg = Package.query.get_or_404(pkg_id)
-    pkg.name        = request.form.get('name', pkg.name).strip()
-    pkg.description = request.form.get('description', pkg.description).strip()
-    pkg.price       = float(request.form.get('price', pkg.price))
-    pkg.max_guests  = int(request.form.get('max_guests', pkg.max_guests))
-    pkg.active      = request.form.get('active', 'true').lower() == 'true'
+    pkg.name               = request.form.get('name', pkg.name).strip()
+    pkg.description        = request.form.get('description', pkg.description).strip()
+    pkg.price              = float(request.form.get('price', pkg.price))
+    pkg.max_guests         = int(request.form.get('max_guests', pkg.max_guests))
+    pkg.active             = request.form.get('active', 'true').lower() == 'true'
+    pkg.shopify_variant_id = request.form.get('shopify_variant_id', pkg.shopify_variant_id).strip()
     db.session.commit()
     return jsonify({"success": True, "package": pkg.to_dict()})
 
