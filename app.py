@@ -31,10 +31,11 @@ MAKE_WEBHOOK = os.environ.get("MAKE_WEBHOOK_URL", "")
 SHOPIFY_STORE   = os.environ.get("SHOPIFY_STORE", "vip-packages.myshopify.com")
 SHOPIFY_TOKEN   = os.environ.get("SHOPIFY_TOKEN", "")
 SHOPIFY_API_VER = "2026-04"
-SHOPIFY_HEADERS = {
-    "X-Shopify-Access-Token": SHOPIFY_TOKEN,
-    "Content-Type": "application/json"
-}
+def get_shopify_headers():
+    return {
+        "X-Shopify-Access-Token": os.environ.get("SHOPIFY_TOKEN", SHOPIFY_TOKEN),
+        "Content-Type": "application/json"
+    }
 
 # Map ClubLifter package names → Shopify Product ID
 # Add more packages here as needed: "Package Name": variant_id
@@ -47,8 +48,10 @@ def get_shopify_variant_id(product_id: int) -> str | None:
     """Fetch the default variant ID for a given Shopify product ID."""
     try:
         url = f"https://{SHOPIFY_STORE}/admin/api/{SHOPIFY_API_VER}/products/{product_id}/variants.json"
-        res = requests.get(url, headers=SHOPIFY_HEADERS, timeout=5).json()
-        variants = res.get("variants", [])
+        res = requests.get(url, headers=get_shopify_headers(), timeout=5)
+        data = res.json()
+        print(f"[SHOPIFY] variant fetch status={res.status_code} data={data}", flush=True)
+        variants = data.get("variants", [])
         if variants:
             return str(variants[0]["id"])
     except Exception:
@@ -107,8 +110,9 @@ def create_shopify_order(customer_name: str, customer_phone: str,
         }
 
         url = f"https://{SHOPIFY_STORE}/admin/api/{SHOPIFY_API_VER}/orders.json"
-        res = requests.post(url, json=order_payload, headers=SHOPIFY_HEADERS, timeout=10)
+        res = requests.post(url, json=order_payload, headers=get_shopify_headers(), timeout=10)
         data = res.json()
+        print(f"[SHOPIFY] status={res.status_code} response={data}", flush=True)
 
         if "order" in data:
             return {
