@@ -13,6 +13,7 @@ app.secret_key = "devverse_secret"
 CORS(app)
 
 # ─── DATABASE CONFIG ───────────────────────────────────────────────────────────
+os.makedirs('/data', exist_ok=True)
 database_url = os.environ.get('DATABASE_URL', 'sqlite:////data/clublifter.db')
 if database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
