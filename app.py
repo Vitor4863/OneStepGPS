@@ -22,13 +22,13 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 # ─── SETTINGS ─────────────────────────────────────────────────────────────────
-API_KEY      = "cWpVu8yTfVRytZRt95Tnkv_VmBfUywfg_oT-GkqGzlI"
+API_KEY      = os.environ.get("ONESTEPGPS_API_KEY", "")
 URL_API      = "https://track.onestepgps.com/v3/api/public/marker"
-MAKE_WEBHOOK = "https://hook.us1.make.com/1j3rppk5wufvglcbe23kto5c63uvdt32"
+MAKE_WEBHOOK = os.environ.get("MAKE_WEBHOOK_URL", "")
 
 # ─── SHOPIFY ──────────────────────────────────────────────────────────────────
-SHOPIFY_STORE   = "vip-packages.myshopify.com"
-SHOPIFY_TOKEN   = "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"
+SHOPIFY_STORE   = os.environ.get("SHOPIFY_STORE", "vip-packages.myshopify.com")
+SHOPIFY_TOKEN   = os.environ.get("SHOPIFY_TOKEN", "")
 SHOPIFY_API_VER = "2026-04"
 SHOPIFY_HEADERS = {
     "X-Shopify-Access-Token": SHOPIFY_TOKEN,
@@ -834,6 +834,35 @@ def seed_data():
 
 with app.app_context():
     db.create_all()
+
+    # ── MIGRATIONS: add new columns to existing databases ─────────────────────
+    with db.engine.connect() as conn:
+        from sqlalchemy import text, inspect
+        inspector = inspect(db.engine)
+
+        existing_package_cols = [c["name"] for c in inspector.get_columns("package")]
+        if "shopify_variant_id" not in existing_package_cols:
+            conn.execute(text("ALTER TABLE package ADD COLUMN shopify_variant_id VARCHAR(50) DEFAULT ''"))
+            conn.commit()
+
+        existing_customer_cols = [c["name"] for c in inspector.get_columns("customer")]
+        if "destination" not in existing_customer_cols:
+            conn.execute(text("ALTER TABLE customer ADD COLUMN destination VARCHAR(100) DEFAULT ''"))
+            conn.commit()
+        if "status" not in existing_customer_cols:
+            conn.execute(text("ALTER TABLE customer ADD COLUMN status VARCHAR(20) DEFAULT 'scheduled'"))
+            conn.commit()
+
+        existing_driver_cols = [c["name"] for c in inspector.get_columns("driver")]
+        if "available" not in existing_driver_cols:
+            conn.execute(text("ALTER TABLE driver ADD COLUMN available BOOLEAN DEFAULT 1"))
+            conn.commit()
+
+        existing_user_cols = [c["name"] for c in inspector.get_columns("user")]
+        if "club_id" not in existing_user_cols:
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN club_id INTEGER DEFAULT NULL'))
+            conn.commit()
+
     seed_data()
 
 if __name__ == '__main__':
