@@ -67,9 +67,9 @@ def create_shopify_order(customer_name: str, customer_phone: str,
     Returns the Shopify order dict or an error dict.
     """
     try:
-        # Look up variant ID from DB package, then map, then fall back to test product
+        # checkout_url flow — no variant lookup needed
         pkg_obj    = Package.query.filter_by(name=package_name).first()
-        variant_id = (pkg_obj.shopify_variant_id or "").strip() if pkg_obj else ""
+        variant_id = ""
         if not variant_id:
             variant_id = SHOPIFY_VARIANT_MAP.get(package_name, "")
         if not variant_id:
@@ -165,13 +165,13 @@ class Package(db.Model):
     price              = db.Column(db.Float, default=0.0)
     max_guests         = db.Column(db.Integer, default=0)
     active             = db.Column(db.Boolean, default=True)
-    shopify_variant_id = db.Column(db.String(50), default="")
+    checkout_url = db.Column(db.String(500), default="")
 
     def to_dict(self):
         return {
             "id": self.id, "name": self.name, "description": self.description,
             "price": self.price, "max_guests": self.max_guests, "active": self.active,
-            "shopify_variant_id": self.shopify_variant_id
+            "checkout_url": self.checkout_url
         }
 
 class Driver(db.Model):
@@ -459,6 +459,7 @@ def cadastrar_cep():
             "shopify_order_number": shopify_result.get("shopify_order_number"),
             "shopify_order_url":    shopify_result.get("shopify_order_url"),
             "shopify_error":        shopify_result.get("error"),
+            "checkout_url":         Package.query.filter_by(name=package).first().checkout_url if Package.query.filter_by(name=package).first() else "",
         })
 
     except Exception as e:
@@ -615,7 +616,7 @@ def new_package():
     if not name: return jsonify({"success": False, "error": "Name is required"})
     pkg = Package(name=name, description=request.form.get('description','').strip(),
                   price=float(request.form.get('price',0)), max_guests=int(request.form.get('max_guests',0)),
-                  shopify_variant_id=request.form.get('shopify_variant_id','').strip())
+                  checkout_url=request.form.get('checkout_url','').strip())
     db.session.add(pkg); db.session.commit()
     return jsonify({"success": True, "package": pkg.to_dict()})
 
@@ -628,7 +629,7 @@ def edit_package(pkg_id):
     pkg.price              = float(request.form.get('price', pkg.price))
     pkg.max_guests         = int(request.form.get('max_guests', pkg.max_guests))
     pkg.active             = request.form.get('active', 'true').lower() == 'true'
-    pkg.shopify_variant_id = request.form.get('shopify_variant_id', pkg.shopify_variant_id).strip()
+    pkg.checkout_url = request.form.get('checkout_url', pkg.checkout_url).strip()
     db.session.commit()
     return jsonify({"success": True, "package": pkg.to_dict()})
 
@@ -846,8 +847,8 @@ with app.app_context():
         inspector = inspect(db.engine)
 
         existing_package_cols = [c["name"] for c in inspector.get_columns("package")]
-        if "shopify_variant_id" not in existing_package_cols:
-            conn.execute(text("ALTER TABLE package ADD COLUMN shopify_variant_id VARCHAR(50) DEFAULT ''"))
+        if "checkout_url" not in existing_package_cols:
+            conn.execute(text("ALTER TABLE package ADD COLUMN checkout_url VARCHAR(500) DEFAULT ''"))
             conn.commit()
 
         existing_customer_cols = [c["name"] for c in inspector.get_columns("customer")]

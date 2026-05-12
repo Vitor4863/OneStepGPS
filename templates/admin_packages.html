@@ -104,9 +104,9 @@
             <div class="f"><label>Price ($)</label><input type="number" id="newPrice" class="fc" placeholder="0" min="0"></div>
             <div class="f"><label>Max Guests</label><input type="number" id="newMaxGuests" class="fc" placeholder="0" min="0"></div>
             <div class="f">
-                <label>Shopify Variant ID</label>
-                <input type="text" id="newVariant" class="fc" placeholder="e.g. 44123456789">
-                <div class="shopify-hint">Found in Shopify Admin → Products → variant URL</div>
+                <label>Checkout URL</label>
+                <input type="text" id="newVariant" class="fc" placeholder="https://myvipzone.myshopify.com/products/....">
+                <div class="shopify-hint">Paste the full Shopify product or checkout URL</div>
             </div>
             <div class="f" style="display:flex;align-items:flex-end;">
                 <button class="btn-add w-100" onclick="addPackage()">+ Add</button>
@@ -138,7 +138,7 @@
                         <td style="color:var(--acc);font-weight:600;">${{ "%.2f"|format(p.price) }}</td>
                         <td>{{ p.max_guests or '—' }}</td>
                         <td>
-                            {% if p.shopify_variant_id %}
+                            {% if p.checkout_url %}
                             <span class="b-shopify">✓ Linked</span>
                             {% else %}
                             <span class="b-noshopify">Not linked</span>
@@ -146,7 +146,7 @@
                         </td>
                         <td><span class="{{ 'b-on' if p.active else 'b-off' }}">{{ 'Active' if p.active else 'Inactive' }}</span></td>
                         <td><div class="btns">
-                            <button class="btn-e" onclick="openEdit({{ p.id }}, '{{ p.name }}', '{{ p.description }}', {{ p.price }}, {{ p.max_guests }}, {{ p.active|lower }}, '{{ p.shopify_variant_id or '' }}')">Edit</button>
+                            <button class="btn-e" onclick="openEdit({{ p.id }}, '{{ p.name }}', '{{ p.description }}', {{ p.price }}, {{ p.max_guests }}, {{ p.active|lower }}, '{{ p.checkout_url or '' }}')">Edit</button>
                             <button class="btn-d" onclick="delPackage({{ p.id }})">Delete</button>
                         </div></td>
                     </tr>
@@ -171,8 +171,8 @@
             <div class="f"><label>Price ($)</label><input type="number" id="ePrice" class="fc" min="0"></div>
             <div class="f"><label>Max Guests</label><input type="number" id="eMaxGuests" class="fc" min="0"></div>
             <div class="f">
-                <label>Shopify Variant ID</label>
-                <input type="text" id="eVariant" class="fc" placeholder="e.g. 44123456789">
+                <label>Checkout URL</label>
+                <input type="text" id="eVariant" class="fc" placeholder="https://myvipzone.myshopify.com/products/....">
                 <div class="shopify-hint">
                     Find it in: Shopify Admin → Products → click product → click variant → copy ID from URL<br>
                     URL looks like: <code style="color:var(--acc)">/variants/<strong>44123456789</strong></code>
@@ -214,7 +214,7 @@ async function addPackage() {
     fd.append('description',        document.getElementById('newDesc').value.trim());
     fd.append('price',              document.getElementById('newPrice').value || 0);
     fd.append('max_guests',         document.getElementById('newMaxGuests').value || 0);
-    fd.append('shopify_variant_id', document.getElementById('newVariant').value.trim());
+    fd.append('checkout_url', document.getElementById('newVariant').value.trim());
     const d = await (await fetch('/admin/packages/new', { method: 'POST', body: fd })).json();
     if (d.success) { toast('Package added!'); location.reload(); }
     else toast(d.error, false);
@@ -239,7 +239,7 @@ async function saveEdit() {
     fd.append('price',              document.getElementById('ePrice').value);
     fd.append('max_guests',         document.getElementById('eMaxGuests').value);
     fd.append('active',             document.getElementById('eActive').value);
-    fd.append('shopify_variant_id', document.getElementById('eVariant').value.trim());
+    fd.append('checkout_url', document.getElementById('eVariant').value.trim());
     const d = await (await fetch(`/admin/packages/edit/${id}`, { method: 'POST', body: fd })).json();
     if (d.success) { toast('Package updated!'); modal.hide(); location.reload(); }
     else toast(d.error, false);
