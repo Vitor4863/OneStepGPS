@@ -475,12 +475,8 @@ document.getElementById('markerForm').onsubmit=async(e)=>{
 };
 
 async function submitSchedule(fd) {
-    e.preventDefault();
-    const st=document.getElementById('status'), fd=new FormData(e.target);
-    if(!fd.get('endereco_completo')){st.innerHTML="<span style='color:var(--red)'>❌ Select a pickup location.</span>";return;}
-    if(!/^\d{2}\/\d{2}\/\d{4}$/.test(fd.get('pickup_date'))){document.getElementById('dateErr').style.display='block';return;}
-    document.getElementById('dateErr').style.display='none';
-    fd.append('pickup_datetime',`${fd.get('pickup_date')} ${fd.get('pickup_time')}`);
+    const st = document.getElementById('status');
+    const form = document.getElementById('markerForm');
     st.innerHTML="<span style='color:#60a5fa'>⏳ Scheduling…</span>";
     document.getElementById('drBox').style.display='none';
     try{
@@ -498,14 +494,17 @@ async function submitSchedule(fd) {
             document.getElementById('drPhone').innerHTML=d.motorista_phone?`📞 <a href="tel:${d.motorista_phone}" style="color:var(--green)">${d.motorista_phone}</a>`:`<span style="color:var(--muted)">No phone registered</span>`;
             if(window.innerWidth<=960)document.getElementById('map').scrollIntoView({behavior:'smooth',block:'start'});
             document.querySelector('#tabelaDados tbody').insertAdjacentHTML('afterbegin',`<tr><td>${fd.get('nome')}</td><td>${fd.get('package')}</td><td>${fd.get('guests')}</td><td class="ac">${d.distancia}km</td></tr>`);
-            e.target.reset();
+            form.reset();
             document.getElementById('addrTxt').innerText='Search or select a hotel…';
             document.getElementById('addrDisp').classList.remove('filled');
             document.getElementById('addrVal').value='';
             document.getElementById('customF').classList.remove('show');
+            document.getElementById('checkoutBtn').style.display='none';
+            document.getElementById('checkoutNote').style.display='none';
+            currentCheckoutUrl='';
         }else{st.innerHTML=`<span style='color:var(--red)'>❌ ${d.error}</span>`;}
     }catch(err){st.innerHTML="<span style='color:var(--red)'>❌ Server error.</span>";}
-};
+}
 </script>
 <!-- PAYMENT CONFIRMATION MODAL -->
 <div id="confirmModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center;">
